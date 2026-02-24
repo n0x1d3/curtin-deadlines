@@ -865,24 +865,20 @@ function outlineToDeadlines(
   return pcItems;
 }
 
-// ── Main public export ────────────────────────────────────────────────────────
+// ── Internal fetch helper ─────────────────────────────────────────────────────
 
 /**
- * Fetches the unit outline for the given unit code, semester, and year, and
- * returns an array of PendingDeadline objects ready for the confirmation UI.
+ * Internal helper that handles steps 1–6: unit lookup → module version →
+ * availability → POST → extract UobOutline. Shared by fetchOutline and
+ * fetchOutlineData so neither duplicates the expensive filter-list construction.
  *
- * Orchestrates: unit lookup → module version → availability ID → outline fetch
- * → parse → merge → return.
- *
- * Throws a user-friendly Error for any failure (unit not found, API down, etc.).
+ * Throws a user-friendly Error on any failure.
  */
-export async function fetchOutline(
-  unitCode: string,
+async function fetchUobOutline(
+  code: string,
   semester: 1 | 2,
   year: number,
-): Promise<PendingDeadline[]> {
-  const code = unitCode.trim().toUpperCase();
-
+): Promise<UobOutline> {
   // Step 1: look up the numeric UNIT_CD + UNIT_VERS for this unit code
   const lookup = await getUnitLookup();
   const unitEntry = lookup[code];
@@ -910,41 +906,30 @@ export async function fetchOutline(
   // CRITICAL: ScreenDataSetGetNew only returns unit-specific data when
   // filterList_units contains a sufficiently large set of units (the full
   // list from ScreenDataSetGetFilterUnit). With a small or empty filter list
-  // the server falls through to COMP1005 as a default. This is confirmed by
-  // comparing our anonymous request against the authenticated HAR capture,
-  // which sends all ~15k units in filterList_units.
+  // the server falls through to COMP1005 as a default.
   //
   // We reconstruct the full filter list from the compact unit lookup cache
-  // (all non-numeric-code units, ~6k items). This is large enough for the
-  // server to respect SelectedUnitCD and return the correct unit's outline.
-  //
-  // Similarly, filterList_avails must contain all the unit's availability
-  // entries (all campuses/semesters), not just the target offering.
-  // The selectionList_* fields then narrow to the specific choice.
+  // (~6k items). filterList_avails must also contain all the unit's avail
+  // entries; selectionList_* fields then narrow to the target offering.
   const unitValue = `${unitEntry.cd},${unitEntry.vers}`;
   const availId = parseInt(availValue.split(',')[0]);
   const availMode = availValue.split(',')[1] ?? 'INT';
 
-  // Build full unit filter list from the compact lookup (no labels needed — server uses Value only)
   const allUnitsFilter = Object.values(lookup).map((u) => osListItem(`${u.cd},${u.vers}`));
-
-  // Build full avails filter list from all items returned for this unit
   const allAvailsFilter = allAvailItems.map((a) => osListItem(a.Value));
 
   const body = buildMinimalBody(moduleVersion, API_VERSIONS.ScreenDataSetGetNew, {
-    // Full filter lists — without EmptyListItem (matching the authenticated HAR structure)
     filterList_units: { List: allUnitsFilter },
     selectionList_units: { List: [osListItem(unitValue)] },
     filterList_avails: { List: allAvailsFilter },
     selectionList_avails: { List: [osListItem(availValue)] },
-    // Scalar fields that the server cross-checks against the filter/selection lists
     SelectedUnitCD: unitEntry.cd,
     SelectedUnitVers: unitEntry.vers,
     SelectedAvailKeyNo: availId,
     SelectedAttcModeCD: availMode,
   });
 
-  // Step 5: POST to ScreenDataSetGetNew — the main outline endpoint
+  // Step 5: POST to ScreenDataSetGetNew
   const resp = (await osPost(
     'screenservices/UnitOutlineBuilder/Public/OutlineHub/ScreenDataSetGetNew',
     body,
@@ -954,7 +939,6 @@ export async function fetchOutline(
     data?: { List?: OsListWrapper<{ UobOutline?: UobOutline }> };
   };
 
-  // Log a warning if version tokens have drifted — response data is still usable
   if (resp.hasModuleVersionChanged || resp.hasApiVersionChanged) {
     console.warn(
       '[outlineApi] API version mismatch detected in response; ' +
@@ -971,6 +955,56 @@ export async function fetchOutline(
     );
   }
 
-  // Step 7: parse AS_TASK + PC_TEXT and merge into PendingDeadline array
-  return outlineToDeadlines(outlineItem.UobOutline, code, semester, year);
+  return outlineItem.UobOutline;
+}
+
+// ── Public exports ────────────────────────────────────────────────────────────
+
+/**
+ * Fetches the unit outline for the given unit code, semester, and year, and
+ * returns an array of PendingDeadline objects ready for the confirmation UI.
+ *
+ * Throws a user-friendly Error for any failure (unit not found, API down, etc.).
+ */
+export async function fetchOutline(
+  unitCode: string,
+  semester: 1 | 2,
+  year: number,
+): Promise<PendingDeadline[]> {
+  const code = unitCode.trim().toUpperCase();
+  const outline = await fetchUobOutline(code, semester, year);
+  return outlineToDeadlines(outline, code, semester, year);
+}
+
+/** Rich outline data returned by fetchOutlineData for the test panel. */
+export interface OutlineData {
+  /** Raw pipe-delimited AS_TASK string from the API (clean text, no null bytes). */
+  asTask: string;
+  /** Raw PC_TEXT HTML table string from the API. */
+  pcText: string;
+  /** AS_TASK parsed into {title, weight?} objects. */
+  asTaskItems: Array<{ title: string; weight?: number }>;
+  /** Final merged PendingDeadline array (same as what the confirmation UI receives). */
+  parsed: PendingDeadline[];
+}
+
+/**
+ * Like fetchOutline but also returns raw AS_TASK + PC_TEXT strings and the
+ * parsed asTaskItems array. Used by the test panel to inspect API output.
+ *
+ * Throws a user-friendly Error for any failure.
+ */
+export async function fetchOutlineData(
+  unitCode: string,
+  semester: 1 | 2,
+  year: number,
+): Promise<OutlineData> {
+  const code = unitCode.trim().toUpperCase();
+  const outline = await fetchUobOutline(code, semester, year);
+  return {
+    asTask: outline.AS_TASK ?? '',
+    pcText: outline.PC_TEXT ?? '',
+    asTaskItems: parseAsTask(outline.AS_TASK ?? ''),
+    parsed: outlineToDeadlines(outline, code, semester, year),
+  };
 }
