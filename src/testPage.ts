@@ -54,6 +54,8 @@ interface Issue {
   level: 'ok' | 'info' | 'warn' | 'error';
   item: string;
   msg: string;
+  /** Raw text / value that triggered this issue — displayed in the panel to aid diagnosis and point to the right fix. */
+  context?: string;
 }
 
 interface UnitResult {
@@ -117,7 +119,9 @@ interface GrabAllEntry {
   tbaCount: number;
   examPeriodCount: number;
   noWeightCount: number;
-  errorMsg?: string; // Only set when status === 'error'
+  errorMsg?: string;  // Only set when status === 'error'
+  warnCount: number;  // warn-level issues from validateItems/validateUnit on the parsed output
+  errorCount: number; // error-level issues (excluding the fetch error itself)
 }
 
 // ── Module-level state ─────────────────────────────────────────────────────────
@@ -181,40 +185,180 @@ function isFinalExamType(title: string): boolean {
   return false;
 }
 
-/** Generate validation issues for an array of parsed PendingDeadline items. */
+/** Generate per-item validation issues for a set of parsed PendingDeadline items. */
 function validateItems(items: PendingDeadline[]): Issue[] {
   const issues: Issue[] = [];
 
+  // Pre-compute duplicate title counts (normalise away punctuation but keep numbers
+  // so "Prac Test 1" and "Prac Test 2" are NOT flagged as duplicates)
+  const normTitle = (t: string) =>
+    t.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+  const titleCounts = new Map<string, number>();
   for (const item of items) {
+    const key = normTitle(item.title ?? '');
+    titleCounts.set(key, (titleCounts.get(key) ?? 0) + 1);
+  }
+
+  for (const item of items) {
+    // ── 1. Title empty / too short ────────────────────────────────────────────
     if (!item.title || item.title.length < 3) {
-      issues.push({ level: 'error', item: item.title || '(empty)', msg: 'Title is empty or too short' });
+      issues.push({ level: 'error', item: item.title || '(empty)', msg: 'Title is empty or too short', context: JSON.stringify(item.title) });
       continue;
     }
 
+    // ── 2. '#' in title (null-byte artefact from OASIS PDF encoding) ──────────
+    if (item.title.includes('#')) {
+      issues.push({ level: 'warn', item: item.title, msg: 'Title contains "#" — null-byte encoding artefact from PDF extraction. Check the null-byte → "#" replacement in extractPDFText (parser.ts).', context: item.title });
+    }
+
+    // ── 3. Title starts with a digit (AS_TASK row number leaked in) ───────────
+    if (/^\d/.test(item.title)) {
+      issues.push({ level: 'warn', item: item.title, msg: 'Title starts with a digit — the row-number column from AS_TASK may have merged into the title. Check the pipe-split in parseAsTask (cols[1]).', context: item.title });
+    }
+
+    // ── 4. Title suspiciously long (cell noise captured with title) ───────────
+    if (item.title.length > 80) {
+      issues.push({ level: 'warn', item: item.title, msg: `Title is ${item.title.length} chars — likely includes surrounding cell content or bracket notes. Check the title cleanup regex chain in parseAssessments / parsePcText.`, context: item.title.slice(0, 120) });
+    }
+
+    // ── 5. Duplicate / near-duplicate title ───────────────────────────────────
+    if ((titleCounts.get(normTitle(item.title)) ?? 0) > 1) {
+      issues.push({ level: 'warn', item: item.title, msg: 'Duplicate or near-duplicate title — parser may have extracted this assessment more than once. Check mergeWithCalendar dedup logic and titlesOverlap matching.' });
+    }
+
+    // ── 6. TBA checks ─────────────────────────────────────────────────────────
     if (item.isTBA) {
       if (isFinalExamType(item.title)) {
-        // Expected: final exam TBA during exam period
         issues.push({ level: 'info', item: item.title, msg: 'Exam period TBA — expected for final exams' });
       } else if (item.weekLabel && /\bweek\s+\d/i.test(item.weekLabel)) {
-        // Week is known but exact day not set
-        issues.push({ level: 'warn', item: item.title, msg: `Week known (${item.weekLabel}) but exact date TBC — user must confirm` });
+        issues.push({ level: 'warn', item: item.title, msg: `Week known (${item.weekLabel}) but exact date TBC — user must confirm`, context: item.weekLabel });
       } else {
-        // Fully unknown
-        issues.push({ level: 'warn', item: item.title, msg: 'Date fully unknown — no week or day information' });
+        issues.push({ level: 'warn', item: item.title, msg: 'Date fully unknown — check PC_TEXT for a week hint in any column (buildWeekHints) or AS_TASK for inline date text.' });
+      }
+      // ── 7. Contradictory: TBA but exactTime is set ──────────────────────────
+      if (item.exactTime) {
+        issues.push({ level: 'warn', item: item.title, msg: `Item is TBA but has exactTime "${item.exactTime}" — time was extracted by EXACT_TIME_RE but the date resolve step didn't fire. Check parseOrdinalDate path in parsePcText.`, context: `exactTime: ${item.exactTime}` });
       }
     }
 
+    // ── 8. calSource=true but isTBA=true (contradictory parser flags) ─────────
+    if (item.calSource && item.isTBA) {
+      issues.push({ level: 'warn', item: item.title, msg: 'calSource is true (came from PC_TEXT calendar) but isTBA is also true — date resolution should have succeeded if the row had a Begin Date. Possible bug in parseProgramCalendar date assignment.', context: `calSource: ${item.calSource}, isTBA: ${item.isTBA}` });
+    }
+
+    // ── 9. Weight checks ──────────────────────────────────────────────────────
     if (item.weight === undefined) {
-      issues.push({ level: 'warn', item: item.title, msg: 'No assessment weight extracted' });
+      issues.push({ level: 'warn', item: item.title, msg: 'No assessment weight extracted — check WEIGHT_PCT_RE in parsePcText and "percent" keyword match in parseAsTask.' });
+    } else if (item.weight === 0) {
+      issues.push({ level: 'warn', item: item.title, msg: 'Weight is 0% — likely a parsing error (e.g. matched "(0%)" in a note). Check WEIGHT_PCT_RE.', context: `weight: ${item.weight}` });
+    } else if (item.weight > 100) {
+      issues.push({ level: 'warn', item: item.title, msg: `Weight is ${item.weight}% — exceeds 100%, likely grabbed the wrong number from the cell. Check WEIGHT_PCT_RE match group.`, context: `weight: ${item.weight}` });
     }
 
+    // ── 10. Date sanity checks (dated items only) ─────────────────────────────
     if (!item.isTBA && item.resolvedDate) {
-      // Sanity check: date should be within a plausible semester range (± 6 months from now)
       const now = Date.now();
-      const diff = Math.abs(item.resolvedDate.getTime() - now);
-      if (diff > 1.5 * 365 * 86_400_000) {
-        issues.push({ level: 'warn', item: item.title, msg: `Date ${item.resolvedDate.toDateString()} looks far from current date — check semester/year` });
+      const itemTime = item.resolvedDate.getTime();
+      const daysPast = (now - itemTime) / 86_400_000;
+      const daysAhead = (itemTime - now) / 86_400_000;
+
+      if (daysPast > 14) {
+        issues.push({ level: 'warn', item: item.title, msg: `Date is ${Math.round(daysPast)} days in the past — verify semester/year selection or check semesterStart constants in getDates.ts.`, context: `resolvedDate: ${item.resolvedDate.toDateString()}` });
+      } else if (daysAhead > 548) {
+        issues.push({ level: 'warn', item: item.title, msg: `Date is more than 18 months away — check the year field or month-to-index mapping in parsePcText (MONTH_MAP).`, context: `resolvedDate: ${item.resolvedDate.toDateString()}` });
       }
+
+      // ── 11. Weekend date ──────────────────────────────────────────────────────
+      const dow = item.resolvedDate.getDay();
+      if (dow === 0 || dow === 6) {
+        issues.push({ level: 'info', item: item.title, msg: `Due date falls on a ${dow === 0 ? 'Sunday' : 'Saturday'} — unusual for assessed submissions. Verify against the unit outline.`, context: item.resolvedDate.toDateString() });
+      }
+    }
+
+    // ── 12. exactTime of 00:00 (likely a placeholder, not a real midnight) ────
+    if (item.exactTime === '00:00') {
+      issues.push({ level: 'info', item: item.title, msg: 'Exact time is 00:00 — may be a placeholder rather than a real midnight deadline. Real midnight cutoffs are typically written "23:59".', context: `exactTime: ${item.exactTime}` });
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * Generate unit-level (aggregate) validation issues.
+ * Call this alongside validateItems() for a full picture of parse quality.
+ *
+ * @param items       Final merged PendingDeadline array
+ * @param asTaskItems Parsed AS_TASK items (pass [] for PDF-only results)
+ */
+function validateUnit(
+  items: PendingDeadline[],
+  asTaskItems: Array<{ title: string; weight?: number }>,
+): Issue[] {
+  const issues: Issue[] = [];
+
+  // ── 1. Zero items — complete parse failure ────────────────────────────────
+  if (items.length === 0) {
+    issues.push({ level: 'error', item: '(unit)', msg: 'No items parsed — complete parse failure. Inspect the AS_TASK and PC_TEXT raw strings in the section below.' });
+    return issues; // further checks are meaningless
+  }
+
+  // ── 2. All items TBA — PC_TEXT table not parsed ───────────────────────────
+  if (items.every((i) => i.isTBA)) {
+    issues.push({ level: 'warn', item: '(unit)', msg: `All ${items.length} items are TBA — PC_TEXT table was not parsed (Begin Date or Assessment column not detected). Check the PC_TEXT diagnostics below; the table layout may need a new column header pattern in parsePcText.` });
+  }
+
+  // ── 3. Multiple final-exam-type items (likely duplication) ───────────────
+  const finals = items.filter((i) => isFinalExamType(i.title));
+  if (finals.length > 1) {
+    issues.push({ level: 'warn', item: '(unit)', msg: `${finals.length} final-exam-type items detected — unlikely to have multiple finals. Check isFinalExamType() classification and mergeWithCalendar dedup.`, context: finals.map((i) => i.title).join(', ') });
+  }
+
+  // ── 4. Weight sum checks ──────────────────────────────────────────────────
+  const weightedItems = items.filter((i) => i.weight !== undefined);
+  if (weightedItems.length >= 2) {
+    const totalWeight = weightedItems.reduce((sum, i) => sum + i.weight!, 0);
+    if (totalWeight > 110) {
+      issues.push({ level: 'warn', item: '(unit)', msg: `Assessment weights sum to ${totalWeight}% — expected ~100%. Check for duplicate items or incorrect weight extraction (WEIGHT_PCT_RE / parseAsTask column split).`, context: `${weightedItems.length} weighted items, sum = ${totalWeight}%` });
+    } else if (weightedItems.length === items.length && totalWeight < 90) {
+      issues.push({ level: 'warn', item: '(unit)', msg: `All ${items.length} items have weights but they sum to only ${totalWeight}% — the outline may have items with unextractable weights or a hidden assessment.`, context: `${weightedItems.length} items, sum = ${totalWeight}%` });
+    }
+  }
+
+  // ── 5. AS_TASK count vs result count mismatch ─────────────────────────────
+  if (asTaskItems.length > 0 && items.length < asTaskItems.length) {
+    issues.push({ level: 'warn', item: '(unit)', msg: `Result has ${items.length} items but AS_TASK lists ${asTaskItems.length} — ${asTaskItems.length - items.length} assessment(s) may have been silently dropped. Check outlineToDeadlines TBA fallback loop.`, context: `AS_TASK: ${asTaskItems.length}, result: ${items.length}` });
+  }
+
+  // ── 6. Many items sharing the exact same due date ─────────────────────────
+  const dateMap = new Map<string, string[]>();
+  for (const item of items) {
+    if (!item.isTBA && item.resolvedDate) {
+      const key = item.resolvedDate.toDateString();
+      const group = dateMap.get(key) ?? [];
+      group.push(item.title);
+      dateMap.set(key, group);
+    }
+  }
+  for (const [dateStr, titles] of dateMap) {
+    if (titles.length >= 3) {
+      issues.push({ level: 'info', item: '(unit)', msg: `${titles.length} items share the same due date (${dateStr}) — may be correct for weekly formats, or the Begin Date was applied to all cells in a week row rather than individual due dates.`, context: titles.join(', ') });
+    }
+  }
+
+  // ── 7. Items outside expected semester date range ─────────────────────────
+  const datedItems = items.filter((i) => !i.isTBA && i.resolvedDate);
+  if (datedItems.length > 0 && items[0].semester && items[0].year) {
+    const sem = items[0].semester;
+    const yr = items[0].year;
+    // Generous range: S1 = Jan–Jul, S2 = Jul–Dec
+    const rangeStart = sem === 1 ? new Date(yr, 0, 1) : new Date(yr, 6, 1);
+    const rangeEnd   = sem === 1 ? new Date(yr, 6, 31) : new Date(yr, 11, 31);
+    const outOfRange = datedItems.filter(
+      (i) => i.resolvedDate! < rangeStart || i.resolvedDate! > rangeEnd,
+    );
+    if (outOfRange.length > 0) {
+      issues.push({ level: 'warn', item: '(unit)', msg: `${outOfRange.length} item(s) fall outside the expected S${sem} ${yr} date range — check parsePcText month/year assignment or whether the outline contains dates from a different semester.`, context: outOfRange.map((i) => `${i.title}: ${i.resolvedDate!.toDateString()}`).join('; ') });
     }
   }
 
@@ -232,6 +376,218 @@ function summarise(items: PendingDeadline[]): ResultSummary {
     weekKnown: tbaItems.filter((i) => i.weekLabel && /\bweek\s+\d/i.test(i.weekLabel)).length,
     noWeight: items.filter((i) => i.weight === undefined).length,
   };
+}
+
+// ── Parser diagnostics ─────────────────────────────────────────────────────────
+
+/** Structural analysis of a PC_TEXT HTML table — mirrors parsePcText column detection. */
+interface PcTextDiagnostic {
+  hasTable: boolean;
+  rowCount: number;            // Total data rows (excluding header)
+  teachingRowCount: number;    // Rows with a valid date not matching non-teaching keywords
+  headers: string[];           // Raw text of each header cell
+  beginDateColIdx: number;     // -1 = not found → dates cannot be resolved
+  assessmentColIdxs: number[]; // Indices of detected assessment / standalone workshop columns
+  skippedRowLabels: string[];  // Begin-date cell text for each non-teaching row skipped
+}
+
+/** One entry in the AS_TASK ↔ PC_TEXT matching reconstruction. */
+interface MatchEntry {
+  asTask: string;
+  weight?: number;
+  pcTextItems: string[]; // PC_TEXT titles that matched this AS_TASK item
+  outcome: 'matched' | 'tba-fallback';
+}
+
+/** Summary of how AS_TASK items mapped to PC_TEXT calendar items. */
+interface AsTaskMatchDiagnostic {
+  matches: MatchEntry[];
+  orphanPcText: string[]; // Dated items not associated with any AS_TASK entry
+}
+
+// NON_TEACHING_RE must match the constant in outlineApi.ts exactly
+const DIAG_NON_TEACHING_RE = /tuition\s+free|study\s+week|examination|mid[- ]semester\s+break/i;
+
+/**
+ * Analyses the structure of a PC_TEXT HTML table to expose exactly which columns
+ * were detected and why rows were accepted or skipped.
+ * Mirrors parsePcText column-detection logic (outlineApi.ts) for diagnostic visibility.
+ */
+function diagnosePcText(pcText: string): PcTextDiagnostic {
+  const empty: PcTextDiagnostic = {
+    hasTable: false, rowCount: 0, teachingRowCount: 0,
+    headers: [], beginDateColIdx: -1, assessmentColIdxs: [], skippedRowLabels: [],
+  };
+  if (!pcText) return empty;
+
+  const doc = new DOMParser().parseFromString(pcText, 'text/html');
+  const rows = Array.from(doc.querySelectorAll('tr'));
+  if (rows.length === 0) return empty;
+
+  const cellText = (el: Element | undefined): string =>
+    (el?.textContent ?? '').replace(/\u00A0/g, ' ').trim();
+
+  const headerCells = Array.from(rows[0].querySelectorAll('th, td'));
+  const headers = headerCells.map(cellText);
+
+  let beginDateColIdx = -1;
+  const assessmentColIdxs: number[] = [];
+  headerCells.forEach((cell, i) => {
+    const t = cellText(cell).toLowerCase();
+    if (t.includes('begin') && t.includes('date')) beginDateColIdx = i;
+    if (t.includes('assessment')) assessmentColIdxs.push(i);
+    else if (t.includes('workshop') && !t.includes('lecture') && !t.includes('tut')) assessmentColIdxs.push(i);
+  });
+
+  const skippedRowLabels: string[] = [];
+  let teachingRowCount = 0;
+  for (let r = 1; r < rows.length; r++) {
+    const cells = Array.from(rows[r].querySelectorAll('td, th'));
+    if (cells.length === 0) continue;
+    const beginDateText = beginDateColIdx >= 0 ? cellText(cells[beginDateColIdx]) : '';
+    if (!beginDateText) continue;
+    if (DIAG_NON_TEACHING_RE.test(beginDateText)) {
+      skippedRowLabels.push(beginDateText);
+    } else if (/^\d{1,2}\s+\w+/.test(beginDateText)) {
+      teachingRowCount++;
+    }
+  }
+
+  return {
+    hasTable: true,
+    rowCount: rows.length - 1,
+    teachingRowCount,
+    headers,
+    beginDateColIdx,
+    assessmentColIdxs,
+    skippedRowLabels,
+  };
+}
+
+/**
+ * Reconstructs which AS_TASK items matched PC_TEXT calendar items and which fell
+ * through as TBA fallbacks — mirrors titlesOverlap logic in outlineApi.ts.
+ */
+function diagnoseMatching(
+  parsed: PendingDeadline[],
+  asTaskItems: Array<{ title: string; weight?: number }>,
+): AsTaskMatchDiagnostic {
+  if (asTaskItems.length === 0) return { matches: [], orphanPcText: [] };
+
+  // Simplified first-word prefix overlap (mirrors titlesOverlap in outlineApi.ts)
+  const firstWord = (s: string) =>
+    s.toLowerCase().replace(/[^a-z]/g, ' ').split(/\s+/).find((w) => w.length >= 3) ?? '';
+  const overlap = (a: string, b: string): boolean => {
+    const fa = firstWord(a);
+    const fb = firstWord(b);
+    return fa.length > 0 && fb.length > 0 && (fa.startsWith(fb) || fb.startsWith(fa));
+  };
+
+  const datedItems = parsed.filter((i) => !i.isTBA);
+
+  const matches: MatchEntry[] = asTaskItems.map((asItem) => {
+    const pcMatches = datedItems.filter((p) => overlap(asItem.title, p.title));
+    return {
+      asTask: asItem.title,
+      weight: asItem.weight,
+      pcTextItems: pcMatches.map((p) => p.title),
+      outcome: pcMatches.length > 0 ? 'matched' : 'tba-fallback',
+    };
+  });
+
+  // PC_TEXT dated items with no corresponding AS_TASK entry
+  const orphanPcText = datedItems
+    .filter((p) => !asTaskItems.some((a) => overlap(a.title, p.title)))
+    .map((p) => p.title);
+
+  return { matches, orphanPcText };
+}
+
+/**
+ * Renders the PC_TEXT structural analysis and AS_TASK ↔ PC_TEXT matching table
+ * as an HTML string. Wire .raw-toggle elements after injecting into the DOM.
+ */
+function renderDiagnostics(
+  pcDiag: PcTextDiagnostic,
+  matchDiag: AsTaskMatchDiagnostic,
+  pcText: string,
+): string {
+  let html = '<div class="diag-wrap">';
+
+  // ── PC_TEXT structure ──────────────────────────────────────────────────────
+  html += '<div class="diag-section">';
+  html += '<strong class="diag-heading">PC_TEXT table structure</strong>';
+  if (!pcDiag.hasTable) {
+    html += '<p style="color:var(--error);font-size:12px">✗ No &lt;tr&gt; rows found in PC_TEXT — table may be absent or in an unexpected format.</p>';
+  } else {
+    const bdStatus = pcDiag.beginDateColIdx >= 0
+      ? `<span class="tag tag-ok">✓ col ${pcDiag.beginDateColIdx}</span>`
+      : `<span class="tag tag-err">✗ not found — dates cannot be resolved without this column</span>`;
+    const assStatus = pcDiag.assessmentColIdxs.length > 0
+      ? `<span class="tag tag-ok">✓ col(s) ${pcDiag.assessmentColIdxs.join(', ')}</span>`
+      : `<span class="tag tag-err">✗ none found — no "assessment" or standalone "workshop" header detected</span>`;
+    const headerList = pcDiag.headers
+      .map((h, i) => {
+        const cls = pcDiag.assessmentColIdxs.includes(i)
+          ? 'diag-col diag-col-assmt'
+          : i === pcDiag.beginDateColIdx ? 'diag-col diag-col-date' : 'diag-col';
+        return `<code class="${cls}">${escHtml(h || '(empty)')}</code>`;
+      }).join(' ');
+
+    html += `<ul class="diag-list">
+      <li><strong>Headers:</strong> ${headerList}</li>
+      <li><strong>Begin Date column:</strong> ${bdStatus}</li>
+      <li><strong>Assessment column(s):</strong> ${assStatus}</li>
+      <li><strong>Rows:</strong> ${pcDiag.rowCount} total · <strong>${pcDiag.teachingRowCount}</strong> teaching weeks parsed</li>
+      ${pcDiag.skippedRowLabels.length > 0
+        ? `<li><strong>Skipped (non-teaching):</strong> ${pcDiag.skippedRowLabels.map((l) => `<code>${escHtml(l)}</code>`).join(', ')}</li>`
+        : '<li style="color:var(--muted)">No non-teaching rows detected</li>'}
+    </ul>`;
+  }
+  html += '</div>';
+
+  // ── AS_TASK ↔ PC_TEXT matching ─────────────────────────────────────────────
+  if (matchDiag.matches.length > 0) {
+    html += '<div class="diag-section" style="margin-top:14px">';
+    html += '<strong class="diag-heading">AS_TASK ↔ PC_TEXT matching</strong>';
+    html += '<table class="diag-table"><thead><tr><th>AS_TASK item</th><th>Wt</th><th>Matched PC_TEXT items</th><th>Outcome</th></tr></thead><tbody>';
+
+    for (const m of matchDiag.matches) {
+      const tag = m.outcome === 'matched'
+        ? `<span class="tag tag-ok">✓ ${m.pcTextItems.length} match${m.pcTextItems.length !== 1 ? 'es' : ''}</span>`
+        : `<span class="tag tag-warn">⚠ TBA fallback</span>`;
+      html += `<tr>
+        <td>${escHtml(m.asTask)}</td>
+        <td>${m.weight !== undefined ? `${m.weight}%` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${m.pcTextItems.length > 0 ? m.pcTextItems.map((t) => `<code>${escHtml(t)}</code>`).join(', ') : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${tag}</td>
+      </tr>`;
+    }
+
+    // Orphaned PC_TEXT items (dated but not tied to any AS_TASK entry)
+    for (const o of matchDiag.orphanPcText) {
+      html += `<tr>
+        <td colspan="2" style="color:var(--muted)">(no AS_TASK match)</td>
+        <td><code>${escHtml(o)}</code></td>
+        <td><span class="tag tag-info">ℹ Orphan</span></td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // ── Rendered PC_TEXT table (collapsible) ───────────────────────────────────
+  if (pcText) {
+    // Use a unique ID to avoid collisions when multiple units are expanded at once
+    const diagId = `diag-pctxt-${Math.random().toString(36).slice(2, 8)}`;
+    html += `<div class="diag-section" style="margin-top:14px">`;
+    html += `<span class="raw-toggle" data-raw-id="${diagId}">▸ Rendered PC_TEXT table</span>`;
+    // Render the Curtin API HTML directly — safe in the extension's own page context
+    html += `<div class="diag-pctxt-rendered raw-box hidden" id="${diagId}">${pcText}</div>`;
+    html += `</div>`;
+  }
+
+  html += '</div>'; // .diag-wrap
+  return html;
 }
 
 // ── Drift detection ────────────────────────────────────────────────────────────
@@ -327,7 +683,10 @@ async function runApiTest(
 
   try {
     const data: OutlineData = await fetchOutlineData(unit, semester, year);
-    const issues = validateItems(data.parsed);
+    const issues = [
+      ...validateItems(data.parsed),
+      ...validateUnit(data.parsed, data.asTaskItems),
+    ];
     const summary = summarise(data.parsed);
     entry.api = {
       success: true,
@@ -385,7 +744,10 @@ async function runPdfTest(
     merged.forEach((item) => { item.unitName = unitName; });
   }
 
-  const issues = validateItems(merged);
+  const issues = [
+    ...validateItems(merged),
+    ...validateUnit(merged, []),
+  ];
   const summary = summarise(merged);
 
   entry.pdf = { filename: file.name, rawText, parsed: merged, issues, summary };
@@ -456,12 +818,19 @@ async function runGrabAll(
         try {
           const data = await fetchOutlineData(unit, semester, year);
           const summary = summarise(data.parsed);
+          // Run validation so issue counts appear in the download report
+          const issueList = [
+            ...validateItems(data.parsed),
+            ...validateUnit(data.parsed, data.asTaskItems),
+          ];
           entry = {
             unit, semester, year, status: 'ok',
             itemCount: summary.total,
             tbaCount: summary.tba,
             examPeriodCount: summary.examPeriod,
             noWeightCount: summary.noWeight,
+            warnCount: issueList.filter((i) => i.level === 'warn').length,
+            errorCount: issueList.filter((i) => i.level === 'error').length,
           };
           okCount++;
         } catch (err) {
@@ -474,6 +843,7 @@ async function runGrabAll(
             unit, semester, year,
             status: isNotOffered ? 'not-offered' : 'error',
             itemCount: 0, tbaCount: 0, examPeriodCount: 0, noWeightCount: 0,
+            warnCount: 0, errorCount: 0,
             errorMsg: isNotOffered ? undefined : msg,
           };
           if (isNotOffered) notOfferedCount++;
@@ -548,6 +918,10 @@ function renderDetailTable(parsed: PendingDeadline[], issues: Issue[]): string {
       : `<span class="tag tag-ok">Dated</span>`;
     const weight = item.weight !== undefined ? `${item.weight}%` : '<span style="color:var(--muted)">—</span>';
     const week = item.weekLabel ? escHtml(item.weekLabel) : '—';
+    // Source: calSource=true → came from PC_TEXT calendar; false/undefined → AS_TASK fallback
+    const source = item.calSource
+      ? `<span class="tag tag-info">Calendar</span>`
+      : `<span class="tag tag-warn" title="AS_TASK fallback — no matching date found in PC_TEXT">AS_TASK</span>`;
     return `<tr>
       <td>${tbaTag}</td>
       <td>${escHtml(item.title)}</td>
@@ -555,13 +929,14 @@ function renderDetailTable(parsed: PendingDeadline[], issues: Issue[]): string {
       <td>${escHtml(date)}</td>
       <td>${week}</td>
       <td>${weight}</td>
+      <td>${source}</td>
     </tr>`;
   }).join('');
 
   const table = `
     <table class="detail-table">
       <thead><tr>
-        <th>Status</th><th>Title</th><th>Unit</th><th>Date</th><th>Week</th><th>Weight</th>
+        <th>Status</th><th>Title</th><th>Unit</th><th>Date</th><th>Week</th><th>Weight</th><th>Source</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -571,7 +946,10 @@ function renderDetailTable(parsed: PendingDeadline[], issues: Issue[]): string {
     : issues.map((iss) => `
         <li>
           ${levelTag(iss.level)}
-          <span class="issue-item"><strong>${escHtml(iss.item)}</strong> — ${escHtml(iss.msg)}</span>
+          <span class="issue-item">
+            <strong>${escHtml(iss.item)}</strong> — ${escHtml(iss.msg)}
+            ${iss.context ? `<code class="issue-context">${escHtml(iss.context)}</code>` : ''}
+          </span>
         </li>`).join('');
 
   return `${table}
@@ -779,13 +1157,22 @@ function toggleScanDetail(tr: HTMLTableRowElement, tbody: HTMLTableSectionElemen
     html += `</div>`;
   }
 
+  // Parser diagnostics: PC_TEXT structure + AS_TASK ↔ PC_TEXT matching table
+  html += `<div style="margin-top:14px"><strong style="font-size:12px">Parser diagnostics</strong>`;
+  html += renderDiagnostics(
+    diagnosePcText(api.pcText),
+    diagnoseMatching(api.parsed, api.asTaskItems),
+    api.pcText,
+  );
+  html += `</div>`;
+
   html += `<div style="margin-top:12px">`;
   html += renderRawInspector(api.asTask, api.pcText);
   html += `</div>`;
 
   inner.innerHTML = html;
 
-  // Wire raw toggles in the new detail panel
+  // Wire raw toggles (including the rendered PC_TEXT toggle) in the new detail panel
   inner.querySelectorAll<HTMLElement>('.raw-toggle').forEach(wireRawToggle);
 }
 
@@ -1048,6 +1435,15 @@ async function init(): Promise<void> {
       html += `</div>`;
     }
 
+    // Parser diagnostics: PC_TEXT structure + AS_TASK ↔ PC_TEXT matching table
+    html += `<div style="margin-top:14px"><strong style="font-size:12px">Parser diagnostics</strong>`;
+    html += renderDiagnostics(
+      diagnosePcText(api.pcText),
+      diagnoseMatching(api.parsed, api.asTaskItems),
+      api.pcText,
+    );
+    html += `</div>`;
+
     html += `<div style="margin-top:12px">`;
     html += renderRawInspector(api.asTask, api.pcText);
     html += `</div>`;
@@ -1152,7 +1548,11 @@ async function init(): Promise<void> {
     line.className =
       `grab-log-line grab-log-${entry.status === 'ok' ? 'ok' : entry.status === 'error' ? 'err' : 'skip'}`;
     if (entry.status === 'ok') {
-      line.textContent = `✓ ${entry.unit} S${entry.semester} ${entry.year} — ${entry.itemCount} items, ${entry.tbaCount} TBA`;
+      // Show warn/error issue counts so problems are visible without opening the full report
+      const issueStr =
+        entry.errorCount > 0 ? ` · ${entry.errorCount} err, ${entry.warnCount} warn` :
+        entry.warnCount > 0  ? ` · ${entry.warnCount} warn` : '';
+      line.textContent = `✓ ${entry.unit} S${entry.semester} ${entry.year} — ${entry.itemCount} items, ${entry.tbaCount} TBA${issueStr}`;
     } else if (entry.status === 'error') {
       line.textContent = `✗ ${entry.unit} S${entry.semester} ${entry.year} — ${entry.errorMsg ?? 'error'}`;
     } else {

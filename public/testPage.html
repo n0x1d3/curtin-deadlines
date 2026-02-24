@@ -333,6 +333,88 @@
       .grab-log-ok   { color: var(--ok); }
       .grab-log-err  { color: var(--error); }
       .grab-log-skip { color: var(--muted); }
+
+      /* ── Parser diagnostics ───────────────────────────────────────────── */
+      /* Wrapper around all diagnostic sub-sections for one unit */
+      .diag-wrap { margin-top: 10px; }
+
+      /* One collapsible diagnostic sub-section (PC_TEXT structure, matching, etc.) */
+      .diag-section { margin-top: 10px; }
+      .diag-heading { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 6px; }
+
+      /* Bullet list used inside PC_TEXT structural analysis */
+      .diag-list { list-style: none; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+      .diag-list li { display: flex; align-items: baseline; gap: 8px; }
+
+      /* AS_TASK ↔ PC_TEXT matching table */
+      .diag-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+      .diag-table th {
+        padding: 4px 8px;
+        text-align: left;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+      }
+      .diag-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+      .diag-table tr:last-child td { border-bottom: none; }
+
+      /* Column header badges in the PC_TEXT header list */
+      .diag-col {
+        display: inline-block;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-family: var(--mono);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      /* Highlighted: Assessment column (green) and Begin Date column (blue) */
+      .diag-col-assmt { background: #d1f5db; border-color: #5dd879; color: #1a7a3a; }
+      .diag-col-date  { background: #ddeeff; border-color: #5599ff; color: #0044aa; }
+      body.dark .diag-col-assmt { background: #1a3d22; border-color: #2d7a40; color: #5dd879; }
+      body.dark .diag-col-date  { background: #0d2040; border-color: #2255bb; color: #7fb3ff; }
+
+      /* Rendered PC_TEXT table (collapsible, Curtin HTML injected directly) */
+      .diag-pctxt-rendered {
+        margin-top: 8px;
+        overflow-x: auto;
+        max-height: 320px;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        background: var(--surface);
+        font-size: 11px;
+      }
+      /* Make the injected Curtin HTML table reasonably readable */
+      .diag-pctxt-rendered table { border-collapse: collapse; font-size: 11px; }
+      .diag-pctxt-rendered td, .diag-pctxt-rendered th {
+        border: 1px solid var(--border);
+        padding: 3px 6px;
+        white-space: nowrap;
+      }
+
+      /* Inline code snippet showing the raw value that triggered an issue */
+      .issue-context {
+        display: inline-block;
+        margin-top: 3px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-family: var(--mono);
+        font-size: 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        max-width: 400px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
     </style>
   </head>
   <body>
