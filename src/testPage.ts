@@ -13,7 +13,7 @@
 //   7. Report download — full JSON including raw AS_TASK / PC_TEXT strings.
 
 import type { Deadline, PendingDeadline } from './types';
-import { fetchOutlineData } from './api/outlineApi';
+import { fetchOutlineData, getAllUnitCodes } from './api/outlineApi';
 import type { OutlineData } from './api/outlineApi';
 import {
   initPdfWorker,
@@ -28,17 +28,20 @@ import {
 // Set up the pdf.js worker before any PDF extraction calls
 initPdfWorker(chrome.runtime.getURL('pdf.worker.min.js'));
 
-// ── Known-good regression baselines ───────────────────────────────────────────
-// Update these when a unit outline is verified correct. "minItems" is the
-// minimum expected item count (use min to be robust against minor outline edits).
+// ── Regression baselines ───────────────────────────────────────────────────────
+// These are EXPECTED baselines, not "known-good" outputs — some of these units
+// still have TBA items or missing weights (which is normal). The regression check
+// only flags if the parser produces FEWER items than expected (regression) or
+// MORE TBA items than the configured maximum (unexpected date loss).
+// Update these values after verifying a unit's output is correct.
 
-interface KnownGood {
+interface Baseline {
   minItems: number;
-  maxTba: number;      // Maximum acceptable TBA items (exam-period TBA expected)
+  maxTba: number;      // Maximum acceptable TBA items (exam-period TBA is expected)
   description: string; // Human-readable note for contributors
 }
 
-const KNOWN_GOOD: Record<string, KnownGood> = {
+const BASELINES: Record<string, Baseline> = {
   COMP1005: { minItems: 6, maxTba: 2, description: '6 dated prac tests + 1 assignment + 1 exam-period final' },
   MATH1019: { minItems: 3, maxTba: 2, description: '3+ items; mid-sem TBA until week known' },
   PRRE1003: { minItems: 18, maxTba: 3, description: '18+ items from PC_TEXT (bi-weekly lab reports)' },
@@ -96,9 +99,25 @@ interface DriftResult {
 
 interface RegressionResult {
   pass: boolean;
-  expected: KnownGood;
+  expected: Baseline;
   got: ResultSummary;
   failures: string[];
+}
+
+// ── Grab-all types ─────────────────────────────────────────────────────────────
+
+/** One entry in the grab-all results list. */
+interface GrabAllEntry {
+  unit: string;
+  semester: 1 | 2;
+  year: number;
+  /** 'ok' = outline found; 'not-offered' = no Bentley Perth offering; 'error' = unexpected failure */
+  status: 'ok' | 'error' | 'not-offered';
+  itemCount: number;
+  tbaCount: number;
+  examPeriodCount: number;
+  noWeightCount: number;
+  errorMsg?: string; // Only set when status === 'error'
 }
 
 // ── Module-level state ─────────────────────────────────────────────────────────
@@ -109,6 +128,47 @@ const results = new Map<string, UnitResult>();
 /** Last API result for the diff section. */
 let lastApiUnit: string | null = null;
 let lastPdfUnit: string | null = null;
+
+// ── Grab-all state ──────────────────────────────────────────────────────────────
+
+/** True while the grab-all scan is paused by the user. */
+let grabAllPaused = false;
+
+/** True once the user cancels an in-progress grab-all scan. */
+let grabAllCancelled = false;
+
+/** Accumulated results from the most recent grab-all run. */
+let grabAllResults: GrabAllEntry[] = [];
+
+// ── Concurrency semaphore ──────────────────────────────────────────────────────
+
+/**
+ * Simple async semaphore used to cap concurrent API requests in Grab All.
+ * acquire() blocks until a slot is available; release() frees a slot and
+ * wakes the next waiting caller.
+ */
+class Semaphore {
+  private queue: Array<() => void> = [];
+  private running = 0;
+  constructor(private readonly limit: number) {}
+
+  async acquire(): Promise<void> {
+    if (this.running < this.limit) {
+      this.running++;
+      return;
+    }
+    return new Promise<void>((resolve) => this.queue.push(resolve));
+  }
+
+  release(): void {
+    this.running--;
+    const next = this.queue.shift();
+    if (next) {
+      this.running++;
+      next();
+    }
+  }
+}
 
 // ── Validation helpers ─────────────────────────────────────────────────────────
 
@@ -221,7 +281,7 @@ function detectDrift(
 // ── Regression check ───────────────────────────────────────────────────────────
 
 function checkRegression(unit: string, summary: ResultSummary): RegressionResult | null {
-  const expected = KNOWN_GOOD[unit];
+  const expected = BASELINES[unit];
   if (!expected) return null;
 
   const failures: string[] = [];
@@ -331,6 +391,130 @@ async function runPdfTest(
   entry.pdf = { filename: file.name, rawText, parsed: merged, issues, summary };
 
   return { unit, result: entry };
+}
+
+// ── Grab All ───────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches every Curtin unit outline for the given semesters and years.
+ *
+ * Uses a Semaphore to cap concurrent requests. Supports pause (caller sets
+ * grabAllPaused = true) and cancel (caller sets grabAllCancelled = true).
+ *
+ * @param years      Array of years to scan (e.g. [2025, 2026])
+ * @param sems       Array of semester numbers to scan (e.g. [1, 2])
+ * @param concurrency Max simultaneous requests (default 10)
+ * @param onProgress Called after each unit completes with running totals
+ * @param appendLog  Called after each unit completes to add a log line in the UI
+ */
+async function runGrabAll(
+  years: number[],
+  sems: Array<1 | 2>,
+  concurrency: number,
+  onProgress: (processed: number, total: number, ok: number, notOffered: number, errors: number) => void,
+  appendLog: (entry: GrabAllEntry) => void,
+): Promise<void> {
+  // Load every known unit code (hits cache or fetches ~12k units once)
+  const allCodes = await getAllUnitCodes();
+
+  // Build the full work queue: one item per (unit, sem, year) combination
+  const queue: Array<{ unit: string; semester: 1 | 2; year: number }> = [];
+  for (const year of years) {
+    for (const sem of sems) {
+      for (const unit of allCodes) {
+        queue.push({ unit, semester: sem, year });
+      }
+    }
+  }
+
+  const total = queue.length;
+  let processed = 0;
+  let okCount = 0;
+  let notOfferedCount = 0;
+  let errorCount = 0;
+
+  const sem = new Semaphore(concurrency);
+
+  // Process every item concurrently up to the semaphore limit.
+  // Promise.allSettled creates all futures at once; each waits at sem.acquire()
+  // before doing any network work, so only `concurrency` run at a time.
+  await Promise.allSettled(
+    queue.map(async ({ unit, semester, year }) => {
+      // Check pause/cancel BEFORE entering the semaphore queue
+      if (grabAllCancelled) return;
+      while (grabAllPaused && !grabAllCancelled) {
+        await new Promise<void>((r) => setTimeout(r, 200));
+      }
+      if (grabAllCancelled) return;
+
+      await sem.acquire();
+      try {
+        // Re-check cancel after acquiring — items queued during cancellation exit here
+        if (grabAllCancelled) return;
+
+        let entry: GrabAllEntry;
+        try {
+          const data = await fetchOutlineData(unit, semester, year);
+          const summary = summarise(data.parsed);
+          entry = {
+            unit, semester, year, status: 'ok',
+            itemCount: summary.total,
+            tbaCount: summary.tba,
+            examPeriodCount: summary.examPeriod,
+            noWeightCount: summary.noWeight,
+          };
+          okCount++;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Distinguish "not offered this semester/campus" from genuine API errors
+          const isNotOffered =
+            msg.includes('No Bentley Perth offering') ||
+            msg.includes('not found in the Curtin unit list');
+          entry = {
+            unit, semester, year,
+            status: isNotOffered ? 'not-offered' : 'error',
+            itemCount: 0, tbaCount: 0, examPeriodCount: 0, noWeightCount: 0,
+            errorMsg: isNotOffered ? undefined : msg,
+          };
+          if (isNotOffered) notOfferedCount++;
+          else errorCount++;
+        }
+
+        grabAllResults.push(entry);
+        processed++;
+        onProgress(processed, total, okCount, notOfferedCount, errorCount);
+        appendLog(entry);
+      } finally {
+        sem.release();
+      }
+    }),
+  );
+}
+
+/** Download a compact JSON report of all grab-all results. */
+function downloadGrabAllReport(): void {
+  if (grabAllResults.length === 0) return;
+
+  // Compact format: per-unit summary only (no raw AS_TASK/PC_TEXT to keep file size manageable)
+  const report = {
+    meta: {
+      generatedAt: new Date().toISOString(),
+      totalUnits: grabAllResults.length,
+      offered: grabAllResults.filter((e) => e.status === 'ok').length,
+      notOffered: grabAllResults.filter((e) => e.status === 'not-offered').length,
+      errors: grabAllResults.filter((e) => e.status === 'error').length,
+    },
+    results: grabAllResults,
+  };
+
+  const json = JSON.stringify(report, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `curtin-grab-all-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── DOM rendering helpers ──────────────────────────────────────────────────────
@@ -503,7 +687,7 @@ function renderRegressionTable(): string {
   }
 
   if (rows.length === 0) {
-    return '<p class="tp-empty">No regression data yet — run a scan or single-unit test for COMP1005, MATH1019, PRRE1003, or ELEN1000.</p>';
+    return '<p class="tp-empty">No baseline data yet — run a scan or single-unit test for COMP1005, MATH1019, PRRE1003, or ELEN1000.</p>';
   }
 
   return `<table class="regression-table">
@@ -949,6 +1133,135 @@ async function init(): Promise<void> {
     const regResults = document.getElementById('reg-results')!;
     regResults.innerHTML = renderRegressionTable();
   }
+
+  // ── 0. Grab All ─────────────────────────────────────────────────────────
+  const grabStartBtn = document.getElementById('grab-start-btn') as HTMLButtonElement;
+  const grabPauseBtn = document.getElementById('grab-pause-btn') as HTMLButtonElement;
+  const grabCancelBtn = document.getElementById('grab-cancel-btn') as HTMLButtonElement;
+  const grabDownloadBtn = document.getElementById('grab-download-btn') as HTMLButtonElement;
+  const grabProgressWrap = document.getElementById('grab-progress-wrap')!;
+  const grabProgressBar = document.getElementById('grab-progress-bar') as HTMLElement;
+  const grabProgressStats = document.getElementById('grab-progress-stats')!;
+  const grabStatusEl = document.getElementById('grab-status')!;
+  const grabLogEl = document.getElementById('grab-log')!;
+
+  /** Prepend one log line for a grab-all result; cap the list at 100 lines. */
+  function appendGrabLog(entry: GrabAllEntry): void {
+    grabLogEl.classList.add('visible');
+    const line = document.createElement('div');
+    line.className =
+      `grab-log-line grab-log-${entry.status === 'ok' ? 'ok' : entry.status === 'error' ? 'err' : 'skip'}`;
+    if (entry.status === 'ok') {
+      line.textContent = `✓ ${entry.unit} S${entry.semester} ${entry.year} — ${entry.itemCount} items, ${entry.tbaCount} TBA`;
+    } else if (entry.status === 'error') {
+      line.textContent = `✗ ${entry.unit} S${entry.semester} ${entry.year} — ${entry.errorMsg ?? 'error'}`;
+    } else {
+      line.textContent = `· ${entry.unit} S${entry.semester} ${entry.year} — not offered`;
+    }
+    // Prepend so newest is at the top; trim old lines beyond 100
+    grabLogEl.insertBefore(line, grabLogEl.firstChild);
+    const lines = grabLogEl.querySelectorAll('.grab-log-line');
+    if (lines.length > 100) lines[lines.length - 1].remove();
+  }
+
+  grabStartBtn.addEventListener('click', async () => {
+    const years = [...document.querySelectorAll<HTMLInputElement>('.grab-year-cb:checked')]
+      .map((el) => parseInt(el.value));
+    const sems = [...document.querySelectorAll<HTMLInputElement>('.grab-sem-cb:checked')]
+      .map((el) => parseInt(el.value) as 1 | 2);
+    const concurrency = parseInt(
+      (document.getElementById('grab-concurrency') as HTMLInputElement).value, 10,
+    ) || 10;
+
+    if (years.length === 0 || sems.length === 0) {
+      grabStatusEl.textContent = 'Select at least one year and one semester.';
+      return;
+    }
+
+    // Reset state for this run
+    grabAllPaused = false;
+    grabAllCancelled = false;
+    grabAllResults = [];
+    grabLogEl.innerHTML = '';
+    grabLogEl.classList.remove('visible');
+    grabPauseBtn.textContent = 'Pause';
+
+    grabStartBtn.disabled = true;
+    grabPauseBtn.disabled = false;
+    grabCancelBtn.disabled = false;
+    grabDownloadBtn.disabled = true;
+    grabProgressWrap.classList.remove('hidden');
+
+    grabStatusEl.innerHTML = '<span class="spinner"></span> Loading unit list from Curtin API…';
+    const startTime = Date.now();
+
+    /** Update the progress bar and stats line after each unit completes. */
+    function onProgress(processed: number, total: number, ok: number, notOffered: number, errors: number): void {
+      const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+      grabProgressBar.style.width = `${pct}%`;
+
+      const elapsed = (Date.now() - startTime) / 1000;
+      const rate = processed > 0 ? processed / elapsed : 0;
+      const remaining = total - processed;
+      const etaSec = rate > 0 ? Math.round(remaining / rate) : 0;
+      const etaStr = etaSec > 60
+        ? `${Math.floor(etaSec / 60)}m ${etaSec % 60}s`
+        : `${etaSec}s`;
+
+      grabProgressStats.innerHTML = `
+        <span><strong>${processed.toLocaleString()}</strong> / ${total.toLocaleString()} (${pct}%)</span>
+        <span><strong>${ok.toLocaleString()}</strong> offered</span>
+        <span><strong>${notOffered.toLocaleString()}</strong> not offered</span>
+        <span><strong>${errors.toLocaleString()}</strong> errors</span>
+        <span>ETA <strong>${rate > 0 ? etaStr : '—'}</strong></span>
+      `;
+
+      // Update status line (show paused state if applicable)
+      if (!grabAllPaused) {
+        grabStatusEl.innerHTML =
+          `<span class="spinner"></span> ${processed.toLocaleString()} / ${total.toLocaleString()} units…`;
+      }
+    }
+
+    try {
+      await runGrabAll(years, sems, concurrency, onProgress, appendGrabLog);
+    } catch (err) {
+      grabStatusEl.innerHTML =
+        `<span class="status-err">✗ ${escHtml(err instanceof Error ? err.message : String(err))}</span>`;
+    }
+
+    const ok = grabAllResults.filter((e) => e.status === 'ok').length;
+    const notOffered = grabAllResults.filter((e) => e.status === 'not-offered').length;
+    const errors = grabAllResults.filter((e) => e.status === 'error').length;
+
+    grabStatusEl.textContent = grabAllCancelled
+      ? `Cancelled after ${grabAllResults.length.toLocaleString()} units — ${ok} offered, ${notOffered} not offered, ${errors} errors.`
+      : `Complete — ${ok.toLocaleString()} offered, ${notOffered.toLocaleString()} not offered, ${errors} errors.`;
+
+    grabStartBtn.disabled = false;
+    grabPauseBtn.disabled = true;
+    grabCancelBtn.disabled = true;
+    grabDownloadBtn.disabled = grabAllResults.length === 0;
+  });
+
+  grabPauseBtn.addEventListener('click', () => {
+    grabAllPaused = !grabAllPaused;
+    grabPauseBtn.textContent = grabAllPaused ? 'Resume' : 'Pause';
+    if (!grabAllPaused) {
+      grabStatusEl.innerHTML = '<span class="spinner"></span> Resuming…';
+    } else {
+      grabStatusEl.textContent = 'Paused.';
+    }
+  });
+
+  grabCancelBtn.addEventListener('click', () => {
+    grabAllCancelled = true;
+    grabAllPaused = false; // Unpause so waiting items can observe cancellation and exit
+    grabStatusEl.textContent = 'Cancelling…';
+    grabCancelBtn.disabled = true;
+  });
+
+  grabDownloadBtn.addEventListener('click', downloadGrabAllReport);
 
   // Update header with extension info
   const headerStatus = document.getElementById('header-status')!;

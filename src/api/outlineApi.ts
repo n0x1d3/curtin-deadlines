@@ -113,17 +113,29 @@ async function osPost(path: string, body: unknown): Promise<unknown> {
 
 // ── Module version ────────────────────────────────────────────────────────────
 
+/** In-memory cache for the module version token. */
+let moduleVersionCache: { token: string; fetchedAt: number } | null = null;
+
+/** Module version token is valid for 5 minutes — it only changes on server deploys. */
+const MODULE_VERSION_TTL_MS = 5 * 60 * 1000;
+
 /**
- * Fetches a fresh moduleVersion token from the OutSystems deployment endpoint.
- * This token must be included in every screenservices request body.
- * It changes whenever the server is redeployed, so we always fetch it fresh.
+ * Fetches the moduleVersion token from the OutSystems deployment endpoint.
+ * The token is cached in memory for 5 minutes — it changes only on server
+ * deploys, not between requests, so a short cache is safe and avoids
+ * unnecessary round-trips during bulk operations (e.g. Grab All).
  */
 async function fetchModuleVersion(): Promise<string> {
+  // Return cached token if still fresh
+  if (moduleVersionCache && Date.now() - moduleVersionCache.fetchedAt < MODULE_VERSION_TTL_MS) {
+    return moduleVersionCache.token;
+  }
   const res = await fetch(`${BASE}/moduleservices/moduleversioninfo`);
   if (!res.ok) {
     throw new Error(`Failed to reach Curtin API (HTTP ${res.status}). Check your connection.`);
   }
   const data = (await res.json()) as { versionToken: string };
+  moduleVersionCache = { token: data.versionToken, fetchedAt: Date.now() };
   return data.versionToken;
 }
 
@@ -1007,4 +1019,16 @@ export async function fetchOutlineData(
     asTaskItems: parseAsTask(outline.AS_TASK ?? ''),
     parsed: outlineToDeadlines(outline, code, semester, year),
   };
+}
+
+/**
+ * Returns every known Curtin unit code, sorted alphabetically.
+ *
+ * Triggers a unit lookup cache fetch on first call (or cache miss), then
+ * returns instantly from the 30-day cache on subsequent calls.
+ * Used by the test panel's Grab All feature to enumerate all available units.
+ */
+export async function getAllUnitCodes(): Promise<string[]> {
+  const lookup = await getUnitLookup();
+  return Object.keys(lookup).sort();
 }

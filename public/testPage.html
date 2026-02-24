@@ -294,6 +294,45 @@
       /* ── Empty / status messages ──────────────────────────────────────── */
       .tp-empty { color: var(--muted); font-size: 12px; padding: 12px 0; }
       .tp-status { font-size: 12px; color: var(--muted); margin-bottom: 12px; min-height: 20px; }
+
+      /* ── Grab All ──────────────────────────────────────────────────────── */
+      .check-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .check-group label {
+        display: flex; align-items: center; gap: 4px;
+        cursor: pointer; white-space: nowrap; font-size: 13px;
+      }
+
+      .grab-progress-wrap { margin-bottom: 12px; }
+      .grab-progress-outer {
+        height: 8px; background: var(--border);
+        border-radius: 4px; overflow: hidden; margin-bottom: 8px;
+      }
+      .grab-progress-inner {
+        height: 100%; background: var(--accent);
+        border-radius: 4px; transition: width .3s ease;
+      }
+      .grab-progress-stats {
+        display: flex; gap: 16px; font-size: 11px; color: var(--muted); flex-wrap: wrap;
+      }
+      .grab-progress-stats strong { color: var(--text); }
+
+      /* Scrollable log of recent grab-all results */
+      .grab-log {
+        max-height: 180px; overflow-y: auto;
+        font-family: var(--mono); font-size: 11px;
+        border: 1px solid var(--border); border-radius: 6px;
+        padding: 6px 10px; margin-top: 10px;
+        display: none; /* shown via .visible */
+      }
+      .grab-log.visible { display: block; }
+      .grab-log-line {
+        padding: 2px 0; border-bottom: 1px solid var(--border);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .grab-log-line:last-child { border-bottom: none; }
+      .grab-log-ok   { color: var(--ok); }
+      .grab-log-err  { color: var(--error); }
+      .grab-log-skip { color: var(--muted); }
     </style>
   </head>
   <body>
@@ -308,6 +347,68 @@
     </header>
 
     <div class="tp-body">
+
+      <!-- ── 0. Grab All ──────────────────────────────────────────────── -->
+      <!-- Fetches EVERY Curtin unit outline for selected semesters/years. -->
+      <!-- Useful for validating parser coverage across the full catalogue. -->
+      <div class="tp-section">
+        <div class="tp-section-header" data-target="grab-body">
+          <h2>0. Grab All unit outlines</h2>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="tp-section-body" id="grab-body">
+          <p class="tp-status">
+            Downloads every Curtin unit outline from the API for the selected semesters.
+            ⚠ This may take 30–120 minutes depending on the number of units and concurrency setting.
+          </p>
+          <div class="tp-controls">
+            <!-- Year checkboxes -->
+            <div class="tp-field">
+              <label>Years</label>
+              <div class="check-group">
+                <label><input type="checkbox" class="grab-year-cb" value="2025"> 2025</label>
+                <label><input type="checkbox" class="grab-year-cb" value="2026" checked> 2026</label>
+              </div>
+            </div>
+            <!-- Semester checkboxes -->
+            <div class="tp-field">
+              <label>Semesters</label>
+              <div class="check-group">
+                <label><input type="checkbox" class="grab-sem-cb" value="1" checked> S1</label>
+                <label><input type="checkbox" class="grab-sem-cb" value="2"> S2</label>
+              </div>
+            </div>
+            <!-- Concurrency limit -->
+            <div class="tp-field">
+              <label>Concurrency</label>
+              <input id="grab-concurrency" type="text" value="10" style="width:55px" title="Max simultaneous API requests" />
+            </div>
+            <!-- Action buttons -->
+            <div class="tp-field" style="flex-direction:row;gap:6px;align-items:flex-end">
+              <button class="btn btn-primary" id="grab-start-btn">Start</button>
+              <button class="btn btn-secondary" id="grab-pause-btn" disabled>Pause</button>
+              <button class="btn btn-secondary" id="grab-cancel-btn" disabled>Cancel</button>
+              <button class="btn btn-secondary" id="grab-download-btn" disabled>Download</button>
+            </div>
+          </div>
+
+          <!-- Progress bar (hidden until a scan starts) -->
+          <div class="grab-progress-wrap hidden" id="grab-progress-wrap">
+            <div class="grab-progress-outer">
+              <div class="grab-progress-inner" id="grab-progress-bar" style="width:0%"></div>
+            </div>
+            <div class="grab-progress-stats" id="grab-progress-stats">
+              <span>0 / 0</span>
+            </div>
+          </div>
+
+          <!-- Status line (spinner / completion message) -->
+          <div class="tp-status" id="grab-status"></div>
+
+          <!-- Rolling log of recent results (newest at top, capped at 100 lines) -->
+          <div id="grab-log" class="grab-log"></div>
+        </div>
+      </div>
 
       <!-- ── 1. Scan All ──────────────────────────────────────────────── -->
       <div class="tp-section">
@@ -426,11 +527,11 @@
       <!-- ── 5. Regression ─────────────────────────────────────────── -->
       <div class="tp-section">
         <div class="tp-section-header" data-target="reg-body">
-          <h2>5. Regression check</h2>
+          <h2>5. Regression / baseline check</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="reg-body">
-          <p class="tp-status">Compares scan / single-test results against known-good expected values. Run a scan first.</p>
+          <p class="tp-status">Compares scan / single-test results against configured baselines. Flags regressions (fewer items than expected or more TBA than allowed). Run a scan first.</p>
           <div id="reg-results"></div>
         </div>
       </div>
