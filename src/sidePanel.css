@@ -1,0 +1,1689 @@
+/* ── CSS Variables (light mode defaults) ─────────────────────────────────── */
+:root {
+  --bg: #ffffff;
+  --bg-card: #f9fafb;
+  --bg-input: #f3f4f6;
+  --bg-toggle: #e5e7eb;
+  --text-primary: #1a1a1a;
+  --text-muted: #6b7280;
+  --text-card: #374151;
+  --gold: #ffc72c;
+  --gold-hover: #e6b000;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --border: #e5e7eb;
+  --error: #ef4444;
+  --success: #22c55e;
+  /* Urgency colours for deadline cards */
+  --urgent: #ef4444;      /* < 48 h — red */
+  --soon: #f97316;        /* < 7 d  — orange */
+  --ok: #22c55e;          /* > 7 d  — green */
+  --overdue: #9ca3af;     /* past   — grey */
+  --radius: 10px;
+}
+
+/* ── Dark mode overrides ─────────────────────────────────────────────────── */
+body.dark {
+  --bg: #18181b;
+  --bg-card: #27272a;
+  --bg-input: #3f3f46;
+  --bg-toggle: #3f3f46;
+  --text-primary: #f9fafb;
+  --text-muted: #9ca3af;
+  --text-card: #d1d5db;
+  --gold: #ffc72c;
+  --gold-hover: #e6b000;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --border: #3f3f46;
+  --error: #f87171;
+  --success: #4ade80;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+body {
+  width: 380px;
+  min-height: 100vh;
+  background: var(--bg);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.header {
+  padding-bottom: 2px;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logo-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Small icon buttons (export + theme toggle) */
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn svg {
+  display: block;
+}
+
+.icon-btn:hover {
+  background: var(--bg-toggle);
+  color: var(--text-primary);
+}
+
+.icon-btn:focus {
+  outline: none;
+}
+
+/* ── PDF drop zone ───────────────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--gold);
+  background: rgba(255, 199, 44, 0.06);
+}
+
+.drop-zone:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.drop-zone-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.drop-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.drop-primary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.drop-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* PDF parsing spinner (shown while processing) */
+.parse-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.parse-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Manual add form ─────────────────────────────────────────────────────── */
+.manual-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.manual-toggle {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  user-select: none;
+  list-style: none; /* hide default details triangle */
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.manual-toggle:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.manual-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.manual-form {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Shared form layout */
+.form-row {
+  display: flex;
+  gap: 8px;
+}
+
+.form-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.form-field input,
+.form-field select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+  color: var(--text-primary);
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Mode toggle (week / date) */
+.mode-toggle-row {
+  display: flex;
+  gap: 16px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-card);
+}
+
+.mode-option input[type='radio'] {
+  accent-color: var(--gold);
+}
+
+/* Week preview text ("→ Mon 16 Mar 2026") */
+.date-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 2px;
+}
+
+.form-error {
+  font-size: 12px;
+  color: var(--error);
+  font-weight: 500;
+}
+
+/* ── Primary button ──────────────────────────────────────────────────────── */
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: var(--gold);
+  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  letter-spacing: 0.1px;
+  box-shadow: var(--shadow);
+}
+
+.button:hover {
+  background: var(--gold-hover);
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+.button:focus {
+  outline: none;
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Deadline cards ──────────────────────────────────────────────────────── */
+#deadline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deadline-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+  /* Left border colour communicates urgency */
+  border-left: 3px solid var(--ok);
+  transition: border-color 0.2s ease;
+  position: relative;
+}
+
+/* Urgency levels — applied via JS based on dueDate distance */
+.deadline-card.urgent {
+  border-left-color: var(--urgent);
+}
+
+.deadline-card.soon {
+  border-left-color: var(--soon);
+}
+
+.deadline-card.ok {
+  border-left-color: var(--ok);
+}
+
+.deadline-card.overdue {
+  border-left-color: var(--overdue);
+  opacity: 0.65;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.card-unit {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Full unit name displayed after the unit code, e.g. "COMP1005 · Introduction to Computing" */
+.card-unit-name {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  /* Don't uppercase — unit names are mixed case */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+/* Assessment weight badge shown in the date row, e.g. "· 20%" */
+.card-weight {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.card-countdown {
+  font-size: 11px;
+  font-weight: 600;
+  /* Colour matches the card's urgency border */
+  color: var(--ok);
+}
+
+.deadline-card.urgent .card-countdown {
+  color: var(--urgent);
+}
+
+.deadline-card.soon .card-countdown {
+  color: var(--soon);
+}
+
+.deadline-card.overdue .card-countdown {
+  color: var(--overdue);
+  text-decoration: line-through;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.card-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.card-dot {
+  opacity: 0.4;
+}
+
+/* Delete button — positioned top-right */
+.card-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.card-delete:hover {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.card-delete:focus {
+  outline: none;
+}
+
+/* ── TBA deadline card ───────────────────────────────────────────────────── */
+
+/* TBA card: neutral grey left border instead of urgency colour */
+.deadline-card.tba-card {
+  border-left-color: var(--text-muted);
+  opacity: 0.9;
+}
+
+/* Section group label — shown between "Week scheduled" and "Date unknown" TBA groups */
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  opacity: 0.55;
+  margin: 10px 0 4px 2px;
+}
+
+/* "Date TBA" / "Week N · TBC" badge shown in place of the countdown */
+.card-tba-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-toggle);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+/* Small helper text showing the week label from PDF on a TBA card */
+.card-week-label-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* "📅 Set date" button */
+.card-set-date-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--gold);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.card-set-date-btn:hover {
+  background: rgba(255, 199, 44, 0.12);
+  border-color: var(--gold);
+}
+
+/* Inline date-setting form — hidden by default, toggled by "Set date" */
+.card-date-form {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Row of inputs: date, time, "— or — Wk", semester, year */
+.card-date-form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.card-form-lbl {
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  color: var(--text-muted);
+  gap: 3px;
+}
+
+/* Date and time inputs inside the card form */
+.card-date-inp,
+.card-time-inp,
+.card-week-inp,
+.card-sem-sel,
+.card-year-inp {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.card-date-inp { width: 120px; }
+.card-time-inp { width: 72px; }
+.card-week-inp { width: 60px; }
+.card-sem-sel  { width: 46px; }
+.card-year-inp { width: 62px; }
+
+.card-date-inp:focus,
+.card-time-inp:focus,
+.card-week-inp:focus,
+.card-sem-sel:focus,
+.card-year-inp:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Save / Cancel action row */
+.card-date-form-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.card-form-save {
+  background: var(--gold);
+  border: none;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.card-form-save:hover {
+  background: var(--gold-hover);
+}
+
+.card-form-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.card-form-cancel:hover {
+  background: var(--bg-toggle);
+}
+
+/* Badge for auto-scraped deadlines */
+.card-source-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-toggle);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* ── Filter / sort bar ───────────────────────────────────────────────────── */
+/* Compact row above the deadline list. Hidden when no deadlines exist.      */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+/* Unit code dropdown */
+.filter-unit-sel {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  /* Wide enough for typical unit codes like "COMP1005" */
+  max-width: 100px;
+}
+
+.filter-unit-sel:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Status pills row — fills remaining space */
+.filter-pills {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+}
+
+/* Individual pill — compact, no border by default */
+.filter-pill {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 3px 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.filter-pill:hover {
+  background: var(--bg-toggle);
+  color: var(--text-primary);
+}
+
+/* Active pill — gold border to indicate selected filter */
+.filter-pill.active {
+  background: rgba(255, 199, 44, 0.15);
+  border-color: var(--gold);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.filter-pill:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Sort toggle button */
+.filter-sort-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.filter-sort-btn:hover {
+  background: var(--bg-toggle);
+  color: var(--text-primary);
+}
+
+.filter-sort-btn:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* "No match" message when filter produces zero results */
+.filter-empty {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.empty-state p {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: var(--text-muted) !important;
+  font-weight: 400 !important;
+  line-height: 1.5;
+}
+
+/* ── Confirmation section ────────────────────────────────────────────────── */
+#confirmation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.confirm-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.confirm-source {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border-radius: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 3px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.text-btn:hover {
+  color: var(--text-primary);
+}
+
+.text-btn:focus {
+  outline: none;
+}
+
+.confirm-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* Scrollable list of confirmation rows */
+#confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+
+/* Per-file section header — shown in confirmation list when multiple PDFs uploaded */
+.confirm-file-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-toggle);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.confirm-file-hdr:first-child {
+  margin-top: 0;
+}
+
+.confirm-file-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-file-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Individual extracted deadline row */
+.confirm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+}
+
+.confirm-row.tba {
+  opacity: 0.6;
+}
+
+.confirm-row input[type='checkbox'] {
+  margin-top: 2px;
+  accent-color: var(--gold);
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.confirm-row-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.conf-inputs {
+  display: flex;
+  gap: 6px;
+}
+
+/* Inline editable inputs inside confirmation row */
+.conf-unit-input,
+.conf-title-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-size: 12px;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease;
+}
+
+.conf-unit-input {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.conf-title-input {
+  flex: 1;
+}
+
+.conf-unit-input:focus,
+.conf-title-input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.conf-date-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.conf-week-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-toggle);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.conf-resolved {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.conf-tba-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--overdue);
+  background: var(--bg-toggle);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* Badge shown on confirmation rows sourced from the Program Calendar section */
+.conf-cal-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* Assessment weight badge shown on confirmation rows, e.g. "20%" */
+.conf-weight-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* No-results state inside confirmation */
+.confirm-empty {
+  padding: 20px;
+  text-align: center;
+}
+
+.confirm-empty p {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.confirm-empty-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── TBA fill-in row (visible only on TBA confirmation rows) ─────────────── */
+/* Lets users enter semester + year + week number for deadlines the parser   */
+/* couldn't resolve due to font encoding issues in the PDF.                  */
+.conf-tba-fill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.conf-fill-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+/* Semester select in confirmation rows */
+.conf-sem-sel {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 5px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.conf-sem-sel:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Year input in confirmation rows */
+.conf-year-inp {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 5px;
+  font-size: 12px;
+  color: var(--text-primary);
+  width: 56px;
+}
+
+.conf-year-inp:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* "Wk ___" label + input */
+.conf-week-lbl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Week number input — accepts single "5", range "1-13", or comma list "1,3,5,7,9,11" */
+.conf-week-inp {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  /* Wide enough for a full semester comma list like "1,2,3,4,5,6,7,8,9,10,11,12" */
+  width: 140px;
+  min-width: 80px;
+}
+
+.conf-week-inp:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.confirm-footer {
+  padding-top: 4px;
+}
+
+/* ── Complete (submitted) button ─────────────────────────────────────────── */
+/* Sits between the countdown and the delete button in the card-top row.     */
+.card-complete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.card-complete:hover {
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.card-complete:focus {
+  outline: none;
+}
+
+/* ── Submit confirmation panel ───────────────────────────────────────────── */
+/* Inline section revealed inside the card when the user clicks ✓.           */
+.card-submit-confirm {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-submit-q {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* "Don't ask me again" checkbox + label */
+.card-submit-skip-lbl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-submit-skip-lbl input[type='checkbox'] {
+  accent-color: var(--gold);
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* "Yes, done" and "Cancel" button row */
+.card-submit-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.card-submit-yes {
+  background: var(--success);
+  border: none;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.card-submit-yes:hover {
+  opacity: 0.85;
+}
+
+.card-submit-no {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.card-submit-no:hover {
+  background: var(--bg-toggle);
+}
+
+/* ── Series grouping ─────────────────────────────────────────────────────── */
+/* Footer appended inside the focus card when it belongs to a numbered series. */
+/* Clicking expands a sibling panel listing all items in the group.           */
+.series-footer {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease;
+}
+
+.series-footer:hover {
+  color: var(--text-primary);
+}
+
+.series-footer:focus {
+  outline: none;
+  color: var(--text-primary);
+}
+
+/* Arrow indicator (▶ / ▲) */
+.series-caret {
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+/* "N more ahead" count — highlighted green like upcoming urgency */
+.series-ahead {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* Expanded panel — visually attached below the focus card */
+.series-expanded {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  /* Pull it flush against the card above */
+  margin-top: -4px;
+  border-top: none;
+  overflow: hidden;
+}
+
+/* Compact row for each item in the expanded panel */
+.series-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.series-item:first-child {
+  border-top: none;
+}
+
+/* Highlight the current focus item with a subtle gold tint */
+.series-item.series-focus {
+  background: rgba(255, 199, 44, 0.07);
+}
+
+/* Past (overdue) items are dimmed and struck through */
+.series-item.series-overdue {
+  opacity: 0.5;
+}
+
+.series-item.series-overdue .series-item-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
+}
+
+/* Flexible title — truncates if too long */
+.series-item-title {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Date and countdown labels — fixed width, muted */
+.series-item-date {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.series-item-ctd {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+}
+
+/* Delete button inside the expanded row */
+.series-item-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 2px 3px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.series-item-del:hover {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.series-item-del:focus {
+  outline: none;
+}
+
+/* ── Outline API fetch section ───────────────────────────────────────────── */
+
+/* Container: stacks unit-code input above the semester/year/button row */
+#api-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Full-width unit code text input — same styling as manual form inputs */
+#api-unit-code {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease;
+  letter-spacing: 0.2px;
+}
+
+#api-unit-code:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+#api-unit-code::placeholder {
+  color: var(--text-muted);
+}
+
+/* Flex row: semester select + year input + fetch button side by side */
+.api-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Semester dropdown — same look as form selects */
+#api-semester {
+  flex: 1.4;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+#api-semester:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Year number input — compact fixed-width */
+#api-year {
+  flex: 0.8;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease;
+  /* Hide the native number spinner arrows */
+  -moz-appearance: textfield;
+}
+
+#api-year::-webkit-outer-spin-button,
+#api-year::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+#api-year:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Fetch button — uses the same gold style as the main .button class */
+#api-fetch-btn {
+  flex: 1.2;
+  padding: 8px 10px;
+  background: var(--gold);
+  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+
+#api-fetch-btn:hover {
+  background: var(--gold-hover);
+}
+
+#api-fetch-btn:active {
+  transform: scale(0.97);
+}
+
+#api-fetch-btn:focus {
+  outline: none;
+}
+
+/* Status / error message below the fetch button row */
+#api-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 16px; /* Reserve space so the layout doesn't jump */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Error state — red text */
+#api-status.api-status--error {
+  color: var(--error);
+}
+
+/* Loading state — prepend a small CSS spinner */
+#api-status.api-status--loading::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ── Button variants ─────────────────────────────────────────────────────── */
+
+/* Secondary — transparent with border; adapts to dark mode via CSS vars */
+.button--secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.button--secondary:hover {
+  background: var(--bg-toggle);
+}
+
+/* Danger — solid red; used for destructive actions like "Clear all" */
+.button--danger {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+}
+
+.button--danger:hover {
+  background: #dc2626;
+}
+
+/* Small variant — compact padding and text; stacks with other modifiers */
+.button--sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  width: auto;
+}
+
+/* ── Settings section ────────────────────────────────────────────────────── */
+
+/* Uses same flex column layout as #confirmation-section */
+#settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Divides the settings into logical groups (Preferences, Data, Other) */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 12px 0 4px;
+}
+
+/* Small all-caps label above each group */
+.settings-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+/* Horizontal row for side-by-side buttons (e.g. Export JSON + Import JSON) */
+.settings-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Small hint text below an action button */
+.settings-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Inline confirm row: "Delete all?" + Yes/No buttons on the same line */
+.settings-danger-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #ef4444;
+  flex-wrap: wrap;
+}
+
+/* Radio button row for "Top / Bottom" overdue position preference */
+.radio-row {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-card);
+}
+
+.radio-row input[type='radio'] {
+  accent-color: var(--gold);
+}
+
+/* ── .ics import hint (below drop-zone) ──────────────────────────────────── */
+.ics-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin: -4px 0 4px; /* pull slightly closer to the drop-zone */
+}
+
+/* Unstyled inline button that looks like a link */
+.inline-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  transition: color 0.15s ease;
+}
+
+.inline-link:hover {
+  color: var(--text-primary);
+}
+
+.inline-link:focus {
+  outline: none;
+  color: var(--text-primary);
+}
+
+/* ── ICS import section ───────────────────────────────────────────────────── */
+
+#ics-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Sub-section containers — stacked with the same gap */
+#ics-units-section,
+#ics-exams-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Thin rule between the unit-fetch and exam-match sub-sections */
+.ics-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2px 0;
+}
+
+/* One unit code per row — checkbox + bold code + semester badge */
+.ics-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ics-unit-row:last-child {
+  border-bottom: none;
+}
+
+.ics-unit-row input[type='checkbox'] {
+  flex-shrink: 0;
+  accent-color: var(--gold);
+  width: 14px;
+  height: 14px;
+}
+
+/* Bold unit code label, e.g. "COMP1005" */
+.ics-unit-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+
+/* Semester + year badge shown to the right of each unit row */
+.ics-unit-sem {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Disabled/loading state for the fetch button */
+#ics-fetch-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* One matched deadline per row — checkbox + label + date */
+.ics-match-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Low-confidence matches are dimmed so users inspect before accepting */
+.ics-match-row.low {
+  opacity: 0.6;
+}
+
+.ics-match-row input[type='checkbox'] {
+  flex-shrink: 0;
+  accent-color: var(--gold);
+  width: 14px;
+  height: 14px;
+}
+
+/* Deadline title + unit label — takes remaining space */
+.ics-match-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+/* Resolved event date — right-aligned, muted */
+.ics-match-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  text-align: right;
+}

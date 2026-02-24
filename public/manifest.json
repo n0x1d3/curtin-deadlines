@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Curtin Deadlines",
+  "version": "0.1.0",
+  "description": "Track all your Curtin deadlines in one place. Add from PDF, by week, or exact date.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Curtin Deadlines"
+  },
+  "permissions": ["storage", "sidePanel", "downloads"],
+  "host_permissions": [
+    "https://curtin.outsystems.app/"
+  ],
+  "side_panel": {
+    "default_path": "sidePanel.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["pdf.worker.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://lms.curtin.edu.au/*", "*://*.blackboard.com/*"],
+      "run_at": "document_idle",
+      "js": ["contentScript.js"]
+    }
+  ]
+}

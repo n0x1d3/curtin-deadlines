@@ -1,0 +1,15 @@
+# Build output
+build/
+
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store
+
+# Release ZIPs
+*.zip
+
+# IDE
+.vscode/
+.idea/
