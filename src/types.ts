@@ -1,7 +1,7 @@
 // ── Shared types for the Curtin Deadlines extension ───────────────────────────
 
 /**
- * A single deadline stored in chrome.storage.sync.
+ * A single deadline stored in chrome.storage.local.
  * dueDate is always a fully resolved ISO 8601 string (sortable, comparable).
  */
 export interface Deadline {
@@ -19,8 +19,15 @@ export interface Deadline {
   weekLabel?: string;
   /** Assessment weight as a percentage (0–100), parsed from the "%" column in the schedule */
   weight?: number;
-  /** 'manual' = entered by user; 'auto' = scraped from Blackboard */
-  source: 'manual' | 'auto';
+  /**
+   * How this deadline was created:
+   *   'manual' = typed by the user in the add form
+   *   'auto'   = scraped from Blackboard by the content script
+   *   'api'    = fetched from the Curtin OutSystems outline API
+   *   'pdf'    = parsed from a dropped unit outline PDF
+   *   'ics'    = resolved from an imported .ics timetable file
+   */
+  source: 'manual' | 'auto' | 'api' | 'pdf' | 'ics';
   /** ISO 8601 timestamp for when this deadline was added */
   addedAt: string;
   /**
@@ -63,6 +70,48 @@ export interface PendingDeadline {
   /** Assessment weight as a percentage (0–100), parsed from the "%" column in the schedule */
   weight?: number;
 }
+
+// ── App settings ──────────────────────────────────────────────────────────────
+
+/** Persistent user preferences stored in chrome.storage.local under 'appSettings'. */
+export interface AppSettings {
+  /** Pre-fills all semester dropdowns (API section, manual form, TBA fill-ins). */
+  defaultSemester: 1 | 2;
+  /** Controls where overdue cards appear relative to upcoming ones. */
+  overduePosition: 'top' | 'bottom';
+}
+
+// ── ICS types ─────────────────────────────────────────────────────────────────
+
+/** A single event extracted from an .ics (iCalendar) file. */
+export interface IcsEvent {
+  summary: string;       // raw SUMMARY value
+  dtstart: Date;         // parsed start date/time
+  dtend?: Date;          // parsed end date/time (optional)
+  unitCode?: string;     // first Curtin unit code found in summary, e.g. "COMP1005"
+}
+
+/** One resolved match: a TBA deadline paired with an ICS event. */
+export interface IcsMatch {
+  deadlineId: string;
+  deadlineTitle: string;
+  deadlineUnit: string;
+  event: IcsEvent;
+  /** The date to apply — may differ from event.dtstart when a "N hours after" offset is used. */
+  resolvedDate: Date;
+  confidence: 'high' | 'low';
+  /** Human-readable description of how the match was made, e.g. "Week 5 lab". */
+  matchReason?: string;
+}
+
+/** Units and semester/year extracted from a timetable .ics file. */
+export interface TimetableInfo {
+  units: string[];    // unique Curtin unit codes found across all events
+  semester: 1 | 2;   // inferred from earliest event date (Feb–Jun = S1, Jul–Nov = S2)
+  year: number;       // year of the earliest event
+}
+
+// ── Message commands ──────────────────────────────────────────────────────────
 
 /**
  * Message command types for communication between side panel and background.

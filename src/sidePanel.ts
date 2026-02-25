@@ -4,13 +4,49 @@
 
 import './sidePanel.css';
 
-// ics library for generating calendar files
-import { createEvents, EventAttributes } from 'ics';
-
-import type { Deadline, PendingDeadline } from './types';
+import type { Deadline, PendingDeadline, AppSettings, IcsEvent, IcsMatch, TimetableInfo } from './types';
 import { command } from './types';
 import { weekToDate, getSemesterWeeks } from './utils/getDates';
 import { fetchOutline } from './api/outlineApi';
+
+// Storage helpers — Chrome storage reads/writes
+import {
+  loadDeadlines,
+  saveDeadlines,
+  addDeadline,
+  deleteDeadline,
+  setDeadlineDate,
+  loadSkipSubmitConfirm,
+  saveSkipSubmitConfirm,
+  loadSettings,
+  saveSettings,
+} from './storage';
+
+// JSON backup: export / import deadlines
+import { exportJSON, importJSON } from './storage/backup';
+
+// Date and countdown formatting utilities
+import { formatDate, formatTime, getCountdown, defaultYear } from './utils/format';
+
+// ICS calendar export (download via background service worker)
+import { exportICS } from './ics/export';
+
+// ICS parsing and deadline matching
+import {
+  parseIcs,
+  matchIcsToDeadlines,
+  matchIcsByWeekAndSession,
+  detectTimetableUnits,
+} from './ics/parser';
+
+// Deadline domain: filtering, sorting, grouping, classification
+import {
+  seriesKey,
+  parseWeekInput,
+  isFinalExamType,
+  extractSingleWeek,
+  buildDeadlineSections,
+} from './domain/deadlines';
 
 // PDF parsing functions extracted into a shared module (also used by testPage)
 import {
@@ -26,143 +62,6 @@ import {
 // ── PDF.js worker setup ───────────────────────────────────────────────────────
 // initPdfWorker resolves the chrome-extension:// URL for the bundled worker file.
 initPdfWorker(chrome.runtime.getURL('pdf.worker.min.js'));
-
-// ── Storage helpers ───────────────────────────────────────────────────────────
-
-/**
- * Load all deadlines from chrome.storage.local.
- *
- * On first run after the migration from sync → local, any deadlines previously
- * stored in chrome.storage.sync are moved to local and removed from sync.
- * chrome.storage.local has a 5 MB limit (vs sync's 8 KB per-key cap),
- * which is far more suitable for storing arrays of deadline objects.
- */
-async function loadDeadlines(): Promise<Deadline[]> {
-  // Primary source: chrome.storage.local
-  const local = await chrome.storage.local.get('deadlines');
-  if (local.deadlines) {
-    return local.deadlines as Deadline[];
-  }
-
-  // Migration: check if old data lives in sync storage
-  try {
-    const sync = await chrome.storage.sync.get('deadlines');
-    if (sync.deadlines && (sync.deadlines as Deadline[]).length > 0) {
-      const migrated = sync.deadlines as Deadline[];
-      // Move to local, clear from sync
-      await chrome.storage.local.set({ deadlines: migrated });
-      await chrome.storage.sync.remove('deadlines');
-      return migrated;
-    }
-  } catch {
-    // Sync unavailable or quota already exceeded — ignore
-  }
-
-  return [];
-}
-
-/** Persist the full deadlines array to chrome.storage.local. */
-async function saveDeadlines(deadlines: Deadline[]): Promise<void> {
-  await chrome.storage.local.set({ deadlines });
-}
-
-/** Add a single deadline, keeping the list sorted by dueDate ascending. */
-async function addDeadline(deadline: Deadline): Promise<void> {
-  const deadlines = await loadDeadlines();
-  deadlines.push(deadline);
-  deadlines.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  await saveDeadlines(deadlines);
-}
-
-/** Remove a deadline by id. */
-async function deleteDeadline(id: string): Promise<void> {
-  const deadlines = await loadDeadlines();
-  await saveDeadlines(deadlines.filter((d) => d.id !== id));
-}
-
-/**
- * Update the due date of an existing deadline and clear its dateTBA flag.
- * Re-sorts the list after updating so the card moves to its correct position.
- */
-async function setDeadlineDate(id: string, dueDate: string): Promise<void> {
-  const deadlines = await loadDeadlines();
-  const idx = deadlines.findIndex((d) => d.id === id);
-  if (idx === -1) return;
-  deadlines[idx].dueDate = dueDate;
-  delete deadlines[idx].dateTBA;
-  // Re-sort after date change
-  deadlines.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  await saveDeadlines(deadlines);
-}
-
-// ── Submit-confirmation preference ────────────────────────────────────────────
-
-/**
- * Returns true when the user has opted out of the "Did you submit?" dialog.
- * Stored in chrome.storage.local so it persists across sessions.
- */
-async function loadSkipSubmitConfirm(): Promise<boolean> {
-  const result = await chrome.storage.local.get('skipSubmitConfirm');
-  return result.skipSubmitConfirm === true;
-}
-
-/** Persist the user's choice to skip the submit confirmation in future. */
-async function saveSkipSubmitConfirm(skip: boolean): Promise<void> {
-  await chrome.storage.local.set({ skipSubmitConfirm: skip });
-}
-
-// ── Date / countdown utilities ────────────────────────────────────────────────
-
-/** Format a Date as "Mon 16 Mar 2026". */
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-AU', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-/** Format a time string from an ISO date like "2026-05-03T23:59:00". */
-function formatTime(isoDate: string): string | null {
-  const d = new Date(isoDate);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  // If time component is midnight (00:00), treat as all-day — don't show time
-  if (h === 0 && m === 0) return null;
-  return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-/**
- * Compute a human-readable countdown string and urgency class for a deadline.
- * @param isoDate ISO 8601 due date string
- * @returns { label, urgencyClass }
- */
-function getCountdown(isoDate: string): { label: string; urgencyClass: string } {
-  const now = new Date();
-  const due = new Date(isoDate);
-  const diffMs = due.getTime() - now.getTime();
-  const diffMins = Math.floor(diffMs / 60_000);
-  const diffHours = Math.floor(diffMs / 3_600_000);
-  const diffDays = Math.floor(diffMs / 86_400_000);
-
-  if (diffMs < 0) {
-    // Already past due
-    return { label: 'overdue', urgencyClass: 'overdue' };
-  } else if (diffMins < 60) {
-    // Under an hour away
-    return { label: `in ${diffMins} min${diffMins !== 1 ? 's' : ''}`, urgencyClass: 'urgent' };
-  } else if (diffHours < 48) {
-    // Within 48 hours — urgent
-    return { label: `in ${diffHours} hour${diffHours !== 1 ? 's' : ''}`, urgencyClass: 'urgent' };
-  } else if (diffDays < 7) {
-    // Within 7 days — soon
-    return { label: `in ${diffDays} day${diffDays !== 1 ? 's' : ''}`, urgencyClass: 'soon' };
-  } else {
-    // More than a week away — ok
-    return { label: `in ${diffDays} days`, urgencyClass: 'ok' };
-  }
-}
 
 // ── Deadline list rendering ───────────────────────────────────────────────────
 
@@ -207,107 +106,16 @@ async function renderDeadlines(): Promise<void> {
   const sortBtn = document.getElementById('sort-btn');
   if (sortBtn) sortBtn.textContent = sortBy === 'date' ? 'Date ↕' : 'Unit ↕';
 
-  // ── Apply filter and sort ───────────────────────────────────────────────────
+  // ── Filter, sort, and group into sections ───────────────────────────────────
+  // buildDeadlineSections is a pure domain function — passes module-level state
+  // as explicit params so the logic is testable without DOM/Chrome APIs.
   const now = new Date();
-  let display = deadlines;
-
-  if (filterUnit) {
-    display = display.filter((d) => d.unit === filterUnit);
-  }
-
-  if (filterStatus === 'upcoming') {
-    display = display.filter((d) => !d.dateTBA && new Date(d.dueDate) > now);
-  } else if (filterStatus === 'tba') {
-    display = display.filter((d) => !!d.dateTBA);
-  } else if (filterStatus === 'overdue') {
-    display = display.filter((d) => !d.dateTBA && new Date(d.dueDate) <= now);
-  }
-
-  // Split deadlines into groups. TBA items are further split into two sub-groups:
-  //   weekKnownTba — dateTBA + a single extractable week number in weekLabel
-  //   fullyTba     — dateTBA + no useful week (e.g. "Fortnightly", blank)
-  // Resolved items are split into upcoming and overdue.
-  // Overdue position (top/bottom) is controlled by the user's overduePosition setting.
-  interface Section { label: string | null; items: Deadline[] }
-  const orderedSections: Section[] = [];
-  {
-    const allTba = display.filter((d) => d.dateTBA);
-
-    // Exam-type TBAs: title is a final exam — date depends on the exam timetable release
-    const examTba = allTba.filter((d) => isFinalExamType(d.title));
-
-    // Week-known TBAs: weekLabel has a single parseable week (and not a final exam)
-    const weekKnownTba = allTba.filter((d) =>
-      !isFinalExamType(d.title) &&
-      extractSingleWeek(d.weekLabel) !== null);
-
-    // Fully unknown TBAs: no week info and not a final exam (e.g. recurring, online tests)
-    const fullyTba = allTba.filter((d) =>
-      !isFinalExamType(d.title) &&
-      extractSingleWeek(d.weekLabel) === null);
-    const upcoming     = display.filter((d) => !d.dateTBA && new Date(d.dueDate) > now);
-    const overdue      = display.filter((d) => !d.dateTBA && new Date(d.dueDate) <= now);
-
-    // Sort exams by unit (predictable order — exam timetable determines actual date)
-    examTba.sort((a, b) => a.unit.localeCompare(b.unit));
-
-    if (sortBy === 'unit') {
-      // Unit sort — all groups sorted by unit, resolved groups secondarily by date
-      weekKnownTba.sort((a, b) => {
-        const wa = extractSingleWeek(a.weekLabel) ?? 99;
-        const wb = extractSingleWeek(b.weekLabel) ?? 99;
-        return wa - wb || a.unit.localeCompare(b.unit);
-      });
-      fullyTba.sort((a, b) => a.unit.localeCompare(b.unit));
-      upcoming.sort((a, b) => a.unit.localeCompare(b.unit) || a.dueDate.localeCompare(b.dueDate));
-      overdue.sort((a, b) => a.unit.localeCompare(b.unit) || a.dueDate.localeCompare(b.dueDate));
-    } else {
-      // Date sort — week-known TBAs sorted by week number so earlier weeks appear first;
-      // fully-unknown TBAs sorted by unit for a consistent, predictable layout
-      weekKnownTba.sort((a, b) => {
-        const wa = extractSingleWeek(a.weekLabel) ?? 99;
-        const wb = extractSingleWeek(b.weekLabel) ?? 99;
-        return wa - wb || a.unit.localeCompare(b.unit);
-      });
-      fullyTba.sort((a, b) => a.unit.localeCompare(b.unit));
-      upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-      overdue.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    }
-
-    // Determine how many distinct TBA sub-groups have items — section labels
-    // are only shown when there are multiple sub-groups so the list stays clean.
-    const tbaSectionCount = [examTba, weekKnownTba, fullyTba].filter(g => g.length > 0).length;
-    const showTbaLabels = tbaSectionCount > 1;
-
-    // Build ordered section list.
-    if (examTba.length > 0) {
-      orderedSections.push({
-        label: showTbaLabels ? 'Exam period · date TBC' : null,
-        items: examTba,
-      });
-    }
-    if (weekKnownTba.length > 0) {
-      orderedSections.push({
-        label: showTbaLabels ? 'Week scheduled · date TBC' : null,
-        items: weekKnownTba,
-      });
-    }
-    if (fullyTba.length > 0) {
-      orderedSections.push({
-        label: showTbaLabels ? 'Date unknown' : null,
-        items: fullyTba,
-      });
-    }
-
-    // Read overdue position from module-level cache (synchronous)
-    const odPos = overduePositionCache;
-    if (odPos === 'top' && overdue.length > 0) orderedSections.push({ label: null, items: overdue });
-    if (upcoming.length > 0)                   orderedSections.push({ label: null, items: upcoming });
-    if (odPos !== 'top' && overdue.length > 0) orderedSections.push({ label: null, items: overdue });
-
-    // Flatten sections back into display so the filterEmpty check below still works
-    display = orderedSections.flatMap((s) => s.items);
-  }
+  const { sections: orderedSections, display } = buildDeadlineSections(deadlines, {
+    filterUnit,
+    filterStatus,
+    sortBy,
+    overduePosition: overduePositionCache,
+  });
 
   // Show "no match" message when filter leaves nothing to display
   if (display.length === 0) {
@@ -719,12 +527,6 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// ── PDF parsing ───────────────────────────────────────────────────────────────
-// Functions imported from ./pdf/parser — see that module for full documentation.
-function defaultYear(): number {
-  return new Date().getFullYear();
-}
-
 // ── Confirmation UI ───────────────────────────────────────────────────────────
 
 /** Global array holding the pending deadlines shown in the confirmation section. */
@@ -754,20 +556,6 @@ let overduePositionCache: 'top' | 'bottom' = 'bottom';
  * is not lost when a deadline is deleted or dates are updated.
  */
 const expandedSeries = new Set<string>();
-
-/**
- * Derive the series group key for a deadline.
- * Titles ending in " N" (space + number) share a key; e.g. "Practical Test 1"
- * and "Practical Test 3" both map to "COMP1005|Practical Test".
- * Non-numbered titles form singleton keys using the full title so they never
- * accidentally merge with numbered items that share the same base name.
- */
-function seriesKey(unit: string, title: string): string {
-  if (/\s+\d+$/.test(title)) {
-    return `${unit}|${title.replace(/\s+\d+$/, '').trim()}`;
-  }
-  return `${unit}|${title}`;
-}
 
 /**
  * Switch the UI to show the PDF confirmation checklist.
@@ -892,41 +680,6 @@ function hideConfirmation(): void {
   document.getElementById('main-section')!.classList.remove('hidden');
   document.getElementById('confirmation-section')!.classList.add('hidden');
   pendingItems = [];
-}
-
-/**
- * Parse a free-text week input into an array of individual week numbers.
- *
- * Supported formats:
- *   "5"            → [5]
- *   "5-7"          → [5, 6, 7]        (inclusive range)
- *   "1,3,5,7"      → [1, 3, 5, 7]     (comma-separated)
- *   "1, 3, 5, 7"   → [1, 3, 5, 7]     (spaces ignored)
- *
- * All values are clamped to 1–20 (the maximum sane semester length).
- */
-function parseWeekInput(raw: string): number[] {
-  const trimmed = raw.trim();
-  if (!trimmed) return [];
-
-  // Detect a simple range like "1-13" or "1–13" (no commas)
-  const rangeMatch = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
-  if (rangeMatch) {
-    const start = parseInt(rangeMatch[1], 10);
-    const end = parseInt(rangeMatch[2], 10);
-    const weeks: number[] = [];
-    // Expand every week in the range, in order
-    for (let w = Math.min(start, end); w <= Math.max(start, end); w++) {
-      if (w >= 1 && w <= 20) weeks.push(w);
-    }
-    return weeks;
-  }
-
-  // Comma/space-separated list (or a single plain number)
-  return trimmed
-    .split(/[\s,]+/)
-    .map((p) => parseInt(p.trim(), 10))
-    .filter((w) => !isNaN(w) && w >= 1 && w <= 20);
 }
 
 /**
@@ -1183,99 +936,6 @@ function updateWeekPreview(): void {
   }
 }
 
-// ── ICS export ────────────────────────────────────────────────────────────────
-
-/**
- * Convert all stored deadlines to ICS EventAttributes and download the file.
- *
- * All-day event: when dueDate is at midnight (no specific time provided).
- * Timed event: when dueDate has a non-midnight time component.
- *
- * Reminders (VALARM):
- *   - 3 days before → "Unit — Task due in 3 days"
- *   - 1 day before
- *   - 1 hour before (timed events only)
- */
-async function exportICS(): Promise<void> {
-  const deadlines = await loadDeadlines();
-  if (deadlines.length === 0) return;
-
-  const events: EventAttributes[] = deadlines.map((d) => {
-    const due = new Date(d.dueDate);
-    const hasTime = due.getHours() !== 0 || due.getMinutes() !== 0;
-
-    // Build VALARM alarms
-    const alarms: EventAttributes['alarms'] = [
-      {
-        action: 'display',
-        description: `${d.unit} — ${d.title} due in 3 days`,
-        trigger: { before: true, days: 3 },
-      },
-      {
-        action: 'display',
-        description: `${d.unit} — ${d.title} due tomorrow`,
-        trigger: { before: true, days: 1 },
-      },
-    ];
-
-    // Add 1-hour reminder only for timed events (not all-day)
-    if (hasTime) {
-      alarms.push({
-        action: 'display',
-        description: `${d.unit} — ${d.title} due in 1 hour`,
-        trigger: { before: true, hours: 1 },
-      });
-    }
-
-    if (hasTime) {
-      // Timed event: start = [year, month, day, hour, minute]
-      const event: EventAttributes = {
-        title: `${d.unit} — ${d.title}`,
-        start: [
-          due.getFullYear(),
-          due.getMonth() + 1,
-          due.getDate(),
-          due.getHours(),
-          due.getMinutes(),
-        ],
-        startOutputType: 'local',
-        duration: { hours: 1 },
-        description: d.weekLabel ? `${d.weekLabel}\n${d.unit} — ${d.title}` : `${d.unit} — ${d.title}`,
-        status: 'CONFIRMED',
-        busyStatus: 'BUSY',
-        alarms,
-      };
-      return event;
-    } else {
-      // All-day event: start = [year, month, day]; duration required by ics library
-      const event: EventAttributes = {
-        title: `${d.unit} — ${d.title}`,
-        start: [due.getFullYear(), due.getMonth() + 1, due.getDate()],
-        duration: { days: 1 },
-        description: d.weekLabel ? `${d.weekLabel}\n${d.unit} — ${d.title}` : `${d.unit} — ${d.title}`,
-        status: 'CONFIRMED',
-        busyStatus: 'FREE',
-        alarms,
-      };
-      return event;
-    }
-  });
-
-  const { error, value } = createEvents(events);
-
-  if (error || !value) {
-    console.error('ICS generation error:', error);
-    return;
-  }
-
-  // Build a meaningful filename using current year + earliest deadline's semester
-  const year = defaultYear();
-  const filename = `Curtin Deadlines ${year}.ics`;
-
-  // Ask the background service worker to trigger the download
-  chrome.runtime.sendMessage({ command: command.downloadICS, value, filename });
-}
-
 // ── Dark mode ─────────────────────────────────────────────────────────────────
 
 /** Toggle dark mode and persist the preference. */
@@ -1430,31 +1090,6 @@ function wirePDFDropZone(): void {
   });
 }
 
-// ── Settings storage ──────────────────────────────────────────────────────────
-
-interface AppSettings {
-  // Pre-fills all semester dropdowns (API section, manual form, TBA fill-ins)
-  defaultSemester: 1 | 2;
-  // Controls where overdue cards are shown relative to upcoming ones
-  overduePosition: 'top' | 'bottom';
-}
-
-/** Load app settings from chrome.storage.local (returns defaults if not set). */
-async function loadSettings(): Promise<AppSettings> {
-  const result = await chrome.storage.local.get('appSettings');
-  const saved = result.appSettings ?? {};
-  return {
-    defaultSemester: (saved.defaultSemester as 1 | 2) ?? 1,
-    overduePosition: (saved.overduePosition as 'top' | 'bottom') ?? 'bottom',
-  };
-}
-
-/** Persist app settings to chrome.storage.local. */
-async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
-  const current = await loadSettings();
-  await chrome.storage.local.set({ appSettings: { ...current, ...settings } });
-}
-
 // ── Settings panel ────────────────────────────────────────────────────────────
 
 /** Show settings section, hide main section. */
@@ -1492,67 +1127,6 @@ function applyDefaultSemester(sem: 1 | 2): void {
   document.querySelectorAll<HTMLSelectElement>('.conf-sem-sel').forEach((sel) => {
     sel.value = String(sem);
   });
-}
-
-/**
- * Export all deadlines as a JSON file download.
- * Uses the anchor + Blob trick — no background service worker needed.
- */
-function exportJSON(deadlines: Deadline[]): void {
-  const json = JSON.stringify(deadlines, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `curtin-deadlines-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-
-  // Release the object URL after a short delay so the download can start
-  setTimeout(() => URL.revokeObjectURL(url), 3000);
-}
-
-/**
- * Import deadlines from a JSON file. Validates structure before saving.
- * Merges with existing deadlines — duplicates (same id) are overwritten.
- */
-async function importJSON(file: File): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const parsed = JSON.parse(reader.result as string);
-
-        // Validate that it's an array of deadline-shaped objects
-        if (!Array.isArray(parsed)) throw new Error('Expected a JSON array of deadlines.');
-        for (const item of parsed) {
-          if (!item.id || !item.title || !item.unit || !item.dueDate) {
-            throw new Error('One or more items are missing required fields (id, title, unit, dueDate).');
-          }
-        }
-
-        // Merge: load existing, remove any with same id, then push imported
-        const existing = await loadDeadlines();
-        const importedIds = new Set((parsed as Deadline[]).map((d) => d.id));
-        const merged = existing.filter((d) => !importedIds.has(d.id)).concat(parsed as Deadline[]);
-        merged.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-
-        await saveDeadlines(merged);
-        await renderDeadlines();
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(new Error('Failed to read file.'));
-    reader.readAsText(file);
-  });
-}
-
-/** Delete every deadline and re-render the (now empty) list. */
-async function clearAllDeadlines(): Promise<void> {
-  await saveDeadlines([]);
-  await renderDeadlines();
 }
 
 /**
@@ -1613,7 +1187,9 @@ async function wireSettingsSection(): Promise<void> {
     if (!file) return;
     importJsonFile.value = ''; // reset so the same file can be re-imported
     try {
+      // importJSON (storage/backup.ts) merges and saves but does not re-render
       await importJSON(file);
+      await renderDeadlines();
       closeSettings();
     } catch (err) {
       alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -1632,7 +1208,9 @@ async function wireSettingsSection(): Promise<void> {
 
   // Yes — delete and return to main
   document.getElementById('set-clear-yes')!.addEventListener('click', async () => {
-    await clearAllDeadlines();
+    // Inline clearAllDeadlines: wipe storage then re-render
+    await saveDeadlines([]);
+    await renderDeadlines();
     // Reset confirm UI state
     clearConfirm.classList.add('hidden');
     clearAllBtn.classList.remove('hidden');
@@ -1660,407 +1238,6 @@ async function wireSettingsSection(): Promise<void> {
   document.getElementById('set-open-test-panel')!.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('testPage.html') });
   });
-}
-
-// ── ICS import ────────────────────────────────────────────────────────────────
-
-/** A single event extracted from an .ics (iCalendar) file. */
-interface IcsEvent {
-  summary: string;       // raw SUMMARY value
-  dtstart: Date;         // parsed start date/time
-  dtend?: Date;          // parsed end date/time (optional)
-  unitCode?: string;     // first Curtin unit code found in summary, e.g. "COMP1005"
-}
-
-/** One resolved match: a TBA deadline paired with an ICS event. */
-interface IcsMatch {
-  deadlineId: string;
-  deadlineTitle: string;
-  deadlineUnit: string;
-  event: IcsEvent;
-  /** The date to apply — may differ from event.dtstart when a "N hours after" offset is used. */
-  resolvedDate: Date;
-  confidence: 'high' | 'low';
-  /** Human-readable description of how the match was made, e.g. "Week 5 lab" or "24h after Week 7 workshop". */
-  matchReason?: string;
-}
-
-/**
- * Parse an iCalendar (.ics) text string and return a list of events.
- *
- * Handles three DTSTART formats:
- *   - `DTSTART:20261109T090000Z`              → UTC datetime
- *   - `DTSTART;TZID=Australia/Perth:20261109T090000` → Perth local time (UTC+8, no DST)
- *   - `DTSTART;VALUE=DATE:20261109`           → all-day date (midnight local)
- */
-function parseIcs(text: string): IcsEvent[] {
-  const events: IcsEvent[] = [];
-
-  // Split on VEVENT boundaries — each block is one calendar event
-  const blocks = text.split('BEGIN:VEVENT');
-  for (let b = 1; b < blocks.length; b++) {
-    const block = blocks[b].split('END:VEVENT')[0];
-    const lines = block.split(/\r?\n/);
-
-    let summary = '';
-    let dtstart: Date | null = null;
-    let dtend: Date | undefined;
-
-    for (const rawLine of lines) {
-      // Handle iCal line folding: continuation lines start with a space/tab
-      const line = rawLine.trimEnd();
-
-      if (line.startsWith('SUMMARY:')) {
-        summary = line.slice('SUMMARY:'.length).trim();
-      } else if (line.startsWith('DTSTART')) {
-        dtstart = parseIcsDate(line);
-      } else if (line.startsWith('DTEND')) {
-        const parsed = parseIcsDate(line);
-        if (parsed) dtend = parsed;
-      }
-    }
-
-    if (!summary || !dtstart) continue;
-
-    // Extract the first Curtin unit code from the summary (e.g. "COMP1005")
-    const unitCodeMatch = /\b([A-Z]{4}\d{4})\b/.exec(summary);
-
-    events.push({
-      summary,
-      dtstart,
-      dtend,
-      unitCode: unitCodeMatch?.[1],
-    });
-  }
-
-  return events;
-}
-
-/**
- * Parse a DTSTART or DTEND property line from an iCal block.
- * Returns null if the format is unrecognised.
- *
- * Supported formats:
- *   DTSTART:20261109T090000Z            → UTC
- *   DTSTART;TZID=Australia/Perth:20261109T090000  → Perth (UTC+8, no DST)
- *   DTSTART;VALUE=DATE:20261109         → all-day (midnight local)
- */
-function parseIcsDate(line: string): Date | null {
-  // Extract the value part (everything after the last colon in the property line)
-  const colonIdx = line.lastIndexOf(':');
-  if (colonIdx === -1) return null;
-  const value = line.slice(colonIdx + 1).trim();
-
-  // UTC datetime: "20261109T090000Z"
-  const utcMatch = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(value);
-  if (utcMatch) {
-    return new Date(Date.UTC(
-      parseInt(utcMatch[1]), parseInt(utcMatch[2]) - 1, parseInt(utcMatch[3]),
-      parseInt(utcMatch[4]), parseInt(utcMatch[5]), parseInt(utcMatch[6]),
-    ));
-  }
-
-  // Local datetime with TZID: "20261109T090000" (Perth = UTC+8, WA has no DST)
-  const localMatch = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(value);
-  if (localMatch) {
-    const isPerth = line.includes('Australia/Perth');
-    if (isPerth) {
-      // UTC+8 — subtract 8 hours to get UTC
-      return new Date(Date.UTC(
-        parseInt(localMatch[1]), parseInt(localMatch[2]) - 1, parseInt(localMatch[3]),
-        parseInt(localMatch[4]) - 8, parseInt(localMatch[5]), parseInt(localMatch[6]),
-      ));
-    }
-    // Unknown TZID — treat as local browser time
-    return new Date(
-      parseInt(localMatch[1]), parseInt(localMatch[2]) - 1, parseInt(localMatch[3]),
-      parseInt(localMatch[4]), parseInt(localMatch[5]), parseInt(localMatch[6]),
-    );
-  }
-
-  // All-day date: "20261109"
-  const dateOnlyMatch = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
-  if (dateOnlyMatch) {
-    return new Date(
-      parseInt(dateOnlyMatch[1]), parseInt(dateOnlyMatch[2]) - 1, parseInt(dateOnlyMatch[3]),
-    );
-  }
-
-  return null;
-}
-
-/**
- * Match ICS events to TBA deadlines.
- *
- * Scoring:
- *   - 'high': event unitCode matches deadline unit AND summary contains an
- *     exam/assessment keyword that appears in the deadline title
- *   - 'low': event unitCode matches but no keyword overlap
- *
- * Returns at most one match per deadline (the highest-scoring event).
- */
-function matchIcsToDeadlines(events: IcsEvent[], deadlines: Deadline[]): IcsMatch[] {
-  // Only consider deadlines where the date is TBA
-  const tbaDeadlines = deadlines.filter((d) => d.dateTBA);
-  const matches: IcsMatch[] = [];
-
-  // EXAM_KEYWORDS is defined at module level — reused here for keyword matching
-  for (const deadline of tbaDeadlines) {
-    // Find events whose unit code matches this deadline's unit
-    const candidates = events.filter(
-      (ev) => ev.unitCode?.toUpperCase() === deadline.unit.toUpperCase(),
-    );
-    if (candidates.length === 0) continue;
-
-    // Score each candidate
-    let bestMatch: IcsEvent | null = null;
-    let bestConfidence: 'high' | 'low' = 'low';
-
-    for (const ev of candidates) {
-      const evLower = ev.summary.toLowerCase();
-      const titleLower = deadline.title.toLowerCase();
-
-      // Check if any exam keyword appears in both event summary and deadline title
-      const keywordInSummary = EXAM_KEYWORDS.some((kw) => evLower.includes(kw));
-      const keywordInTitle   = EXAM_KEYWORDS.some((kw) => titleLower.includes(kw));
-
-      const confidence: 'high' | 'low' = (keywordInSummary && keywordInTitle) ? 'high' : 'low';
-
-      // Prefer 'high' over 'low'; take the first high match, or first low if no high
-      if (!bestMatch || (confidence === 'high' && bestConfidence === 'low')) {
-        bestMatch = ev;
-        bestConfidence = confidence;
-      }
-    }
-
-    if (bestMatch) {
-      matches.push({
-        deadlineId: deadline.id,
-        deadlineTitle: deadline.title,
-        deadlineUnit: deadline.unit,
-        event: bestMatch,
-        // resolvedDate is the event start time (no offset for exam-type matches)
-        resolvedDate: bestMatch.dtstart,
-        confidence: bestConfidence,
-      });
-    }
-  }
-
-  return matches;
-}
-
-/**
- * Broad keywords used only for ICS event confidence boosting — if the same keyword
- * appears in both the ICS event summary and the deadline title, the match is 'high'.
- * This is intentionally broad (includes "test", "quiz") for similarity detection.
- * NOT used for the "Exam period" TBA section — use isFinalExamType() for that.
- */
-const EXAM_KEYWORDS = [
-  'exam', 'final', 'test', 'quiz', 'assessment', 'mid-sem', 'mid sem', 'midsem',
-];
-
-/**
- * Returns true only when the title represents a FINAL EXAM scheduled in the
- * official exam period. In-semester assessments (mid-semester tests, quizzes,
- * practicals, online tests, lab reports, workshops) return false.
- *
- * Examples:
- *   "Final Examination"   → true   (scheduled in exam timetable)
- *   "Final Exam"          → true
- *   "Examination"         → true   (standalone "examination" = end-of-semester)
- *   "Mid-Semester Test"   → false  (in-semester, week-known)
- *   "Online Test"         → false  (recurring, not exam-period)
- *   "Practical Test"      → false  (in-lab, in-semester)
- *   "Quiz"                → false  (in-semester)
- *   "Laboratory Report"   → false  (in-semester)
- */
-function isFinalExamType(title: string): boolean {
-  const lower = title.toLowerCase();
-  // In-semester disqualifiers — these are never scheduled in the exam period
-  if (/\b(mid[\s-]?sem(ester)?|midterm|prac(tical)?\b|lab\b|quiz\b|worksheet|workshop|tutorial|tut\b|online\s+test|weekly|e-?test|midsem)\b/.test(lower)) return false;
-  // "final" signals end-of-semester regardless of the noun that follows
-  if (/\bfinal\b/.test(lower)) return true;
-  // Standalone "exam" or "examination" without any in-semester qualifier
-  return /\b(exam|examination)\b/.test(lower);
-}
-
-/**
- * Extract a single teaching week number from a weekLabel string.
- * Returns null when no single week is found (ranges like "Weeks 2–12", "Fortnightly", or blank).
- *
- * Examples:
- *   "Week 7"                          → 7
- *   "During Week 5 lab"               → 5
- *   "24 hours after workshop Week 10" → 10
- *   "Teaching weeks 2-12"             → null  (plural "weeks" doesn't match)
- *   "Fortnightly"                     → null
- */
-function extractSingleWeek(weekLabel: string | undefined): number | null {
-  if (!weekLabel) return null;
-  const m = /\bweek\s+(\d{1,2})\b/i.exec(weekLabel);
-  return m ? parseInt(m[1], 10) : null;
-}
-
-/**
- * Second matching pass: resolve TBA deadlines that reference a specific teaching
- * week and session type (lab, workshop, tutorial, lecture) in their weekLabel.
- *
- * For each TBA deadline:
- *   1. Extract a single week number from weekLabel (e.g. "Week 7" → 7).
- *      Ranges like "Weeks 2-12" or "Fortnightly" produce no match → skip.
- *   2. Detect a session-type keyword from title + weekLabel
- *      (lab / workshop / tutorial / lecture).
- *   3. Extract an optional "N hours after" offset from weekLabel.
- *   4. Compute the Mon–Sun window for that teaching week.
- *   5. Find candidate ICS events for the same unit within that window.
- *   6. Score candidates: events whose summary contains a matching session keyword
- *      get 'high' confidence; others get 'low'.
- *   7. Apply the hours offset to get resolvedDate.
- *   8. Build a human-readable matchReason string.
- */
-function matchIcsByWeekAndSession(
-  events: IcsEvent[],
-  deadlines: Deadline[],
-  semester: 1 | 2,
-  year: number,
-): IcsMatch[] {
-  // Only consider deadlines where the date is still TBA
-  const tbaDeadlines = deadlines.filter((d) => d.dateTBA);
-  const matches: IcsMatch[] = [];
-
-  // Session-type keyword groups — first match in each group wins
-  const SESSION_TYPES: { keys: string[]; tag: string }[] = [
-    { keys: ['lab', 'laboratory', 'practical', 'prac'], tag: 'lab'      },
-    { keys: ['workshop'],                               tag: 'workshop' },
-    { keys: ['tutorial', 'tut'],                        tag: 'tutorial' },
-    { keys: ['lecture', 'lect'],                        tag: 'lecture'  },
-  ];
-
-  for (const deadline of tbaDeadlines) {
-    const weekLabelLower = (deadline.weekLabel ?? '').toLowerCase();
-    const titleLower     = deadline.title.toLowerCase();
-
-    // ── Step A: extract a single teaching week number ────────────────────────
-    // Delegates to extractSingleWeek() — ranges like "Weeks 2-12" and
-    // "Fortnightly" return null and are skipped.
-    const week = extractSingleWeek(deadline.weekLabel);
-    if (week === null) continue;
-
-    // ── Step B: detect session type from title and/or weekLabel ─────────────
-    let sessionTag: string | null = null;
-    for (const { keys, tag } of SESSION_TYPES) {
-      const inTitle     = keys.some((k) => titleLower.includes(k));
-      const inWeekLabel = keys.some((k) => weekLabelLower.includes(k));
-      if (inTitle || inWeekLabel) {
-        sessionTag = tag;
-        break;
-      }
-    }
-
-    // ── Step C: extract "N hours after" offset from weekLabel ────────────────
-    const hoursMatch = /(\d+)\s*hours?\s*(after|following)/i.exec(deadline.weekLabel ?? '');
-    const hoursAfter = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
-
-    // ── Step D: compute the Mon–Sun window for this teaching week ────────────
-    const weekStart = weekToDate(semester, year, week, 0); // Monday 00:00 local
-    const weekEnd   = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6); // advance to Sunday
-    weekEnd.setHours(23, 59, 59, 999);
-
-    // ── Step E: find candidate ICS events within the week window ─────────────
-    const candidates = events.filter((ev) => {
-      if (ev.unitCode?.toUpperCase() !== deadline.unit.toUpperCase()) return false;
-      return ev.dtstart >= weekStart && ev.dtstart <= weekEnd;
-    });
-    if (candidates.length === 0) continue;
-
-    // ── Step F: score candidates by session type ─────────────────────────────
-    // If a session tag was detected, prefer events whose summary contains a
-    // matching keyword. Ties are broken by earliest event time.
-    type Scored = { ev: IcsEvent; score: number };
-    const scored: Scored[] = candidates.map((ev) => {
-      const evLower = ev.summary.toLowerCase();
-      const hasTag  = sessionTag
-        ? SESSION_TYPES.find((s) => s.tag === sessionTag)!.keys.some((k) => evLower.includes(k))
-        : false;
-      return { ev, score: hasTag ? 1 : 0 };
-    });
-
-    // Sort: highest score first, then earliest start time
-    scored.sort((a, b) => b.score - a.score || a.ev.dtstart.getTime() - b.ev.dtstart.getTime());
-    const best = scored[0].ev;
-    const bestScore = scored[0].score;
-
-    // ── Step G: compute resolvedDate with optional hours offset ──────────────
-    const resolvedDate = new Date(best.dtstart.getTime());
-    if (hoursAfter > 0) {
-      resolvedDate.setTime(resolvedDate.getTime() + hoursAfter * 3_600_000);
-    }
-
-    // ── Step H: build a human-readable match reason ──────────────────────────
-    let matchReason: string;
-    if (sessionTag && hoursAfter > 0) {
-      matchReason = `${hoursAfter}h after Week ${week} ${sessionTag}`;
-    } else if (sessionTag) {
-      matchReason = `Week ${week} ${sessionTag}`;
-    } else {
-      matchReason = `Week ${week} class`;
-    }
-
-    // ── Step I: push result ───────────────────────────────────────────────────
-    // 'high' only when a session keyword matched the event summary directly;
-    // 'low' when the match is unit+week only (no session type) or the session
-    // type wasn't found in the event summary.
-    const confidence: 'high' | 'low' = (sessionTag && bestScore === 1) ? 'high' : 'low';
-
-    matches.push({
-      deadlineId:    deadline.id,
-      deadlineTitle: deadline.title,
-      deadlineUnit:  deadline.unit,
-      event:         best,
-      resolvedDate,
-      confidence,
-      matchReason,
-    });
-  }
-
-  return matches;
-}
-
-/** Units and semester/year extracted from a timetable .ics file. */
-interface TimetableInfo {
-  units: string[];    // unique Curtin unit codes found across all events
-  semester: 1 | 2;   // inferred from earliest event date (Feb–Jun = S1, Jul–Nov = S2)
-  year: number;       // year of the earliest event
-}
-
-/**
- * Analyse a set of parsed ICS events to detect whether they represent a Curtin
- * class timetable, and if so, which unit codes and semester/year are involved.
- *
- * Unit codes are extracted from SUMMARY fields.
- * Semester is inferred from the month of the earliest event:
- *   Feb–Jun  → Semester 1
- *   Jul–Nov  → Semester 2 (anything outside this range also defaults to 2)
- */
-function detectTimetableUnits(events: IcsEvent[]): TimetableInfo {
-  // Collect unique unit codes across all events (filter out undefined)
-  const units = [...new Set(
-    events.map((e) => e.unitCode).filter((c): c is string => !!c),
-  )].sort();
-
-  // Find the earliest event date to infer semester and year
-  const earliest = events.reduce<Date | null>((min, e) => {
-    return !min || e.dtstart < min ? e.dtstart : min;
-  }, null) ?? new Date();
-
-  const year = earliest.getFullYear();
-  const month = earliest.getMonth() + 1; // 1-based
-
-  // Semester 1 runs Feb–Jun, Semester 2 runs Jul–Nov
-  const semester: 1 | 2 = month >= 2 && month <= 6 ? 1 : 2;
-
-  return { units, semester, year };
 }
 
 /**
