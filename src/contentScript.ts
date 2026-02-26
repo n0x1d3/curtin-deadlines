@@ -11,8 +11,8 @@
 // changes its DOM structure. Scraped items are tagged source='auto' and shown
 // with a badge in the side panel. Duplicates are filtered on import.
 
-import { command } from './types';
-import type { Deadline } from './types';
+import { command } from "./types";
+import type { Deadline } from "./types";
 
 // ── Blackboard Original selectors ────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ function scrapeOriginal(): Partial<Deadline>[] {
   rows.forEach((row) => {
     // Extract unit code from the course title element
     const nameCells = row.querySelectorAll<HTMLElement>(
-      '.cellName a, .description a, .assessmentTitle',
+      ".cellName a, .description a, .assessmentTitle",
     );
     const titleEl = nameCells[0];
     if (!titleEl) return;
@@ -49,7 +49,8 @@ function scrapeOriginal(): Partial<Deadline>[] {
     if (!dueDateEl) return;
 
     const dueDateText = dueDateEl.textContent?.trim();
-    if (!dueDateText || dueDateText.toLowerCase().includes('no due date')) return;
+    if (!dueDateText || dueDateText.toLowerCase().includes("no due date"))
+      return;
 
     const dueDate = parseBbDate(dueDateText);
     if (!dueDate) return;
@@ -61,7 +62,7 @@ function scrapeOriginal(): Partial<Deadline>[] {
       title,
       unit,
       dueDate: dueDate.toISOString(),
-      source: 'auto',
+      source: "auto",
     });
   });
 
@@ -97,13 +98,13 @@ function scrapeUltra(): Partial<Deadline>[] {
     if (!dateEl) return;
 
     // Try datetime attribute first (most reliable)
-    const datetimeAttr = dateEl.getAttribute('datetime');
+    const datetimeAttr = dateEl.getAttribute("datetime");
     let dueDate: Date | null = null;
 
     if (datetimeAttr) {
       dueDate = new Date(datetimeAttr);
     } else {
-      dueDate = parseBbDate(dateEl.textContent?.trim() ?? '');
+      dueDate = parseBbDate(dateEl.textContent?.trim() ?? "");
     }
 
     if (!dueDate || isNaN(dueDate.getTime())) return;
@@ -114,7 +115,7 @@ function scrapeUltra(): Partial<Deadline>[] {
       title,
       unit,
       dueDate: dueDate.toISOString(),
-      source: 'auto',
+      source: "auto",
     });
   });
 
@@ -136,19 +137,22 @@ function scrapeCalendar(): Partial<Deadline>[] {
   );
 
   calItems.forEach((item) => {
-    const titleEl = item.querySelector<HTMLElement>('[class*="title"], [class*="name"], a');
+    const titleEl = item.querySelector<HTMLElement>(
+      '[class*="title"], [class*="name"], a',
+    );
     const title = titleEl?.textContent?.trim();
     if (!title) return;
 
     // Due date from time element or data attribute
-    const timeEl = item.querySelector<HTMLElement>('time');
-    const dateAttr = timeEl?.getAttribute('datetime');
+    const timeEl = item.querySelector<HTMLElement>("time");
+    const dateAttr = timeEl?.getAttribute("datetime");
     let dueDate: Date | null = null;
 
     if (dateAttr) {
       dueDate = new Date(dateAttr);
     } else {
-      const dateText = item.querySelector('[class*="date"]')?.textContent?.trim() ?? '';
+      const dateText =
+        item.querySelector('[class*="date"]')?.textContent?.trim() ?? "";
       dueDate = parseBbDate(dateText);
     }
 
@@ -160,7 +164,7 @@ function scrapeCalendar(): Partial<Deadline>[] {
       title,
       unit,
       dueDate: dueDate.toISOString(),
-      source: 'auto',
+      source: "auto",
     });
   });
 
@@ -193,7 +197,10 @@ function parseBbDate(text: string): Date | null {
 
   // Clean up common Blackboard date noise and retry
   // e.g. "Due: 14 April, 2026 11:59 PM" → "14 April, 2026 11:59 PM"
-  const cleaned = text.replace(/^Due:\s*/i, '').replace(/\s+/g, ' ').trim();
+  const cleaned = text
+    .replace(/^Due:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
   const d2 = new Date(cleaned);
   return isNaN(d2.getTime()) ? null : d2;
 }
@@ -203,9 +210,9 @@ function parseBbDate(text: string): Date | null {
  * Ultra often includes course codes in sub-text like "(COMP1005)"
  */
 function extractUnitFromCard(el: HTMLElement): string {
-  const text = el.textContent ?? '';
+  const text = el.textContent ?? "";
   const match = text.match(/\b([A-Z]{2,4}\d{4})\b/);
-  return match?.[1] ?? '';
+  return match?.[1] ?? "";
 }
 
 /**
@@ -214,7 +221,9 @@ function extractUnitFromCard(el: HTMLElement): string {
  */
 function extractUnitFromPage(): string {
   // Check URL for course code pattern
-  const urlMatch = window.location.pathname.match(/\/courses\/([A-Z]{2,4}\d{4})/i);
+  const urlMatch = window.location.pathname.match(
+    /\/courses\/([A-Z]{2,4}\d{4})/i,
+  );
   if (urlMatch) return urlMatch[1].toUpperCase();
 
   // Check breadcrumb navigation
@@ -230,14 +239,14 @@ function extractUnitFromPage(): string {
   const titleMatch = document.title.match(/\b([A-Z]{2,4}\d{4})\b/);
   if (titleMatch) return titleMatch[1].toUpperCase();
 
-  return 'UNKNOWN';
+  return "UNKNOWN";
 }
 
 /** Deduplicate results by unit + title combination. */
 function deduplicateResults(results: Partial<Deadline>[]): Partial<Deadline>[] {
   const seen = new Set<string>();
   return results.filter((r) => {
-    const key = `${r.unit ?? ''}|${r.title ?? ''}`.toLowerCase();
+    const key = `${r.unit ?? ""}|${r.title ?? ""}`.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -10,17 +10,17 @@
 //   4. POST ScreenDataSetGetNew → UobOutline with AS_TASK + PC_TEXT
 //   5. outlineToDeadlines()   → array of PendingDeadline for the confirmation UI
 
-import type { PendingDeadline } from '../types';
+import type { PendingDeadline } from "../types";
 import {
   type UobOutline,
   parseAsTask,
   outlineToDeadlines,
-} from '../domain/outline';
+} from "../domain/outline";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Base URL for all OutSystems API calls. */
-const BASE = 'https://curtin.outsystems.app/UnitOutlineBuilder';
+const BASE = "https://curtin.outsystems.app/UnitOutlineBuilder";
 
 /**
  * Per-endpoint API version tokens sourced from authenticated HAR capture.
@@ -30,13 +30,13 @@ const BASE = 'https://curtin.outsystems.app/UnitOutlineBuilder';
  * These tokens change only when the server is redeployed.
  */
 const API_VERSIONS: Record<string, string> = {
-  ScreenDataSetGetFilterUnit: 'axSR8n8P8MsJ41MrNViNvg',
-  DataActionGetAvailabilities: 'igu7+gCJcnPAU_YQy5dB4g',
-  ScreenDataSetGetNew: 'aDiUvMK2z_RjPnvHmPq_Wg',
+  ScreenDataSetGetFilterUnit: "axSR8n8P8MsJ41MrNViNvg",
+  DataActionGetAvailabilities: "igu7+gCJcnPAU_YQy5dB4g",
+  ScreenDataSetGetNew: "aDiUvMK2z_RjPnvHmPq_Wg",
 };
 
 /** chrome.storage.local key for the unit code → {cd, vers} lookup cache. */
-const UNIT_CACHE_KEY = 'outlineApiUnitLookup';
+const UNIT_CACHE_KEY = "outlineApiUnitLookup";
 
 // (No avails cache key — avails are always fetched fresh per unit; see note above.)
 
@@ -47,7 +47,7 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** A single unit's numeric identifiers used in API requests. */
 interface UnitEntry {
-  cd: number;   // UNIT_CD — OutSystems primary key
+  cd: number; // UNIT_CD — OutSystems primary key
   vers: number; // UNIT_VERS — version number (usually 1)
 }
 
@@ -88,19 +88,21 @@ interface AvailEntry {
  */
 async function osPost(path: string, body: unknown): Promise<unknown> {
   const res = await fetch(`${BASE}/${path}`, {
-    method: 'POST',
+    method: "POST",
     // Set Referer to the OutSystems page URL so the server's CSRF/aggregate checks pass.
     // OutSystems only runs data aggregates when the request looks like it originates from
     // its own page. Without a matching Referer, the response contains only version metadata
     // and no `data` key. The fetch `referrer` option is the standard way to set Referer
     // programmatically (unlike the `Referer` header name, which is forbidden in fetch).
     referrer: `${BASE}/OutlineHub`,
-    referrerPolicy: 'unsafe-url',
-    headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+    referrerPolicy: "unsafe-url",
+    headers: { "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`API request failed (HTTP ${res.status}). Please try again.`);
+    throw new Error(
+      `API request failed (HTTP ${res.status}). Please try again.`,
+    );
   }
   return res.json();
 }
@@ -121,12 +123,17 @@ const MODULE_VERSION_TTL_MS = 5 * 60 * 1000;
  */
 async function fetchModuleVersion(): Promise<string> {
   // Return cached token if still fresh
-  if (moduleVersionCache && Date.now() - moduleVersionCache.fetchedAt < MODULE_VERSION_TTL_MS) {
+  if (
+    moduleVersionCache &&
+    Date.now() - moduleVersionCache.fetchedAt < MODULE_VERSION_TTL_MS
+  ) {
     return moduleVersionCache.token;
   }
   const res = await fetch(`${BASE}/moduleservices/moduleversioninfo`);
   if (!res.ok) {
-    throw new Error(`Failed to reach Curtin API (HTTP ${res.status}). Check your connection.`);
+    throw new Error(
+      `Failed to reach Curtin API (HTTP ${res.status}). Check your connection.`,
+    );
   }
   const data = (await res.json()) as { versionToken: string };
   moduleVersionCache = { token: data.versionToken, fetchedAt: Date.now() };
@@ -141,11 +148,11 @@ async function fetchModuleVersion(): Promise<string> {
  * returns HTTP 400 (it uses EmptyListItem to know the schema of the list).
  */
 const EMPTY_DD_ITEM = {
-  Value: '',
-  Label: '',
-  ImageUrlOrIconClass: '',
-  GroupName: '',
-  Description: '',
+  Value: "",
+  Label: "",
+  ImageUrlOrIconClass: "",
+  GroupName: "",
+  Description: "",
 };
 
 /**
@@ -157,70 +164,70 @@ const EMPTY_DD_ITEM = {
 const EMPTY_AVAIL_ITEM = {
   UNIT_CD: -2147483648,
   UNIT_VERS: -2147483648,
-  FULL_TITLE: '',
-  ABBREV_TITLE: '',
-  STAGE: '',
+  FULL_TITLE: "",
+  ABBREV_TITLE: "",
+  STAGE: "",
   AVAILABLE_YEAR: -2147483648,
-  UNIT_LEVEL: '',
-  CREDIT_VALUE: '-79228162514264337593543950335',
-  RESULT_TYPE: '',
-  COORDINATOR: '',
-  ADMIN_DETAILS: '',
-  OWNING_ORG_CD: '',
-  FACULTY_CD: '',
-  ACTIVE_FG: '',
-  CREATED_DATE: '1900-01-01T00:00:00',
-  CHANGED_DATE: '1900-01-01T00:00:00',
-  EFFECTIVE_DATE: '1900-01-01T00:00:00',
-  DEACTIVATION_DATE: '1900-01-01T00:00:00',
-  STAGE_DESC: '',
-  SPK_CAT_CD: '',
-  UNIT_CD_UDC: '',
-  FACULTY_ORG_CODE: '',
-  FACULTY_ORG_NAME: '',
-  FACULTY_ORG_SHORT_NAME: '',
-  FACULTY_ORG_TYPE: '',
-  FACULTY_TOP_ORG_CODE: '',
-  FACULTY_TOP_ORG: '',
+  UNIT_LEVEL: "",
+  CREDIT_VALUE: "-79228162514264337593543950335",
+  RESULT_TYPE: "",
+  COORDINATOR: "",
+  ADMIN_DETAILS: "",
+  OWNING_ORG_CD: "",
+  FACULTY_CD: "",
+  ACTIVE_FG: "",
+  CREATED_DATE: "1900-01-01T00:00:00",
+  CHANGED_DATE: "1900-01-01T00:00:00",
+  EFFECTIVE_DATE: "1900-01-01T00:00:00",
+  DEACTIVATION_DATE: "1900-01-01T00:00:00",
+  STAGE_DESC: "",
+  SPK_CAT_CD: "",
+  UNIT_CD_UDC: "",
+  FACULTY_ORG_CODE: "",
+  FACULTY_ORG_NAME: "",
+  FACULTY_ORG_SHORT_NAME: "",
+  FACULTY_ORG_TYPE: "",
+  FACULTY_TOP_ORG_CODE: "",
+  FACULTY_TOP_ORG: "",
   FACULTY_DATA_YEAR: -2147483648,
-  FACULTY_IS_CURRENT: '',
-  FACULTY_CREATED_DATE: '1900-01-01T00:00:00',
-  FACULTY_CHANGED_DATE: '1900-01-01T00:00:00',
-  AREA_ORG_CODE: '',
-  AREA_ORG_NAME: '',
-  AREA_ORG_SHORT_NAME: '',
-  AREA_ORG_TYPE: '',
-  AREA_TOP_ORG_CODE: '',
-  AREA_TOP_ORG: '',
+  FACULTY_IS_CURRENT: "",
+  FACULTY_CREATED_DATE: "1900-01-01T00:00:00",
+  FACULTY_CHANGED_DATE: "1900-01-01T00:00:00",
+  AREA_ORG_CODE: "",
+  AREA_ORG_NAME: "",
+  AREA_ORG_SHORT_NAME: "",
+  AREA_ORG_TYPE: "",
+  AREA_TOP_ORG_CODE: "",
+  AREA_TOP_ORG: "",
   AREA_DATA_YEAR: -2147483648,
-  AREA_IS_CURRENT: '',
-  AREA_CREATED_DATE: '1900-01-01T00:00:00',
-  AREA_CHANGED_DATE: '1900-01-01T00:00:00',
+  AREA_IS_CURRENT: "",
+  AREA_CREATED_DATE: "1900-01-01T00:00:00",
+  AREA_CHANGED_DATE: "1900-01-01T00:00:00",
   AVAIL_KEY_NO: -2147483648,
   AVAIL_NO: -2147483648,
-  AVAIL_DESCRIPTION: '',
+  AVAIL_DESCRIPTION: "",
   AVAIL_YEAR: -2147483648,
-  AVAIL_STUDYPERIOD_CD: '',
-  AVAIL_STUDY_PERIOD: '',
-  AVAIL_TO_STU_FG: '',
-  AVAIL_LOCATION_CD: '',
-  AVAIL_LOCATION: '',
+  AVAIL_STUDYPERIOD_CD: "",
+  AVAIL_STUDY_PERIOD: "",
+  AVAIL_TO_STU_FG: "",
+  AVAIL_LOCATION_CD: "",
+  AVAIL_LOCATION: "",
   AVAIL_CURR_NO_ENROLLED: -2147483648,
-  AVAIL_START_DATE: '1900-01-01T00:00:00',
-  AVAIL_END_DATE: '1900-01-01T00:00:00',
-  AVAIL_ACTIVE_FG: '',
-  AVAIL_CREATED_DATE: '1900-01-01T00:00:00',
-  AVAIL_CHANGE_DATE: '1900-01-01T00:00:00',
+  AVAIL_START_DATE: "1900-01-01T00:00:00",
+  AVAIL_END_DATE: "1900-01-01T00:00:00",
+  AVAIL_ACTIVE_FG: "",
+  AVAIL_CREATED_DATE: "1900-01-01T00:00:00",
+  AVAIL_CHANGE_DATE: "1900-01-01T00:00:00",
   AVAIL_ATT_MODE_AVAIL_KEY_NO: -2147483648,
-  ATTNDC_MODE_CD: '',
-  ATTENDANCE_MODE: '',
-  AVAIL_ATT_CREATED_DATE: '1900-01-01T00:00:00',
-  AVAIL_ATT_CHANGED_DATE: '1900-01-01T00:00:00',
-  HR_EMPLOYEE: '',
-  SURNAME: '',
-  TITLE: '',
-  FIRST_NAME: '',
-  PREFERRED_NAME: '',
+  ATTNDC_MODE_CD: "",
+  ATTENDANCE_MODE: "",
+  AVAIL_ATT_CREATED_DATE: "1900-01-01T00:00:00",
+  AVAIL_ATT_CHANGED_DATE: "1900-01-01T00:00:00",
+  HR_EMPLOYEE: "",
+  SURNAME: "",
+  TITLE: "",
+  FIRST_NAME: "",
+  PREFERRED_NAME: "",
 };
 
 /**
@@ -232,16 +239,16 @@ const ANON_CLIENT_VARS = {
   IsAllowedFlag_Expired: true,
   IsUserAdmin: false,
   RedirectTimer: 0,
-  UserPhotoURL: '',
+  UserPhotoURL: "",
   IsUserStandard: false,
-  LastURL: '',
-  UserName: '',
+  LastURL: "",
+  UserName: "",
   IsAllowedFlag: false,
   IsUserSchool: false,
   IsUserLibrary: false,
-  CurtinID: '',
+  CurtinID: "",
   IsUserFaculty: false,
-  User_OS_id: '',
+  User_OS_id: "",
 };
 
 /**
@@ -266,7 +273,7 @@ function buildMinimalBody(
 ): unknown {
   return {
     versionInfo: { moduleVersion, apiVersion },
-    viewName: 'Public.OutlineHub',
+    viewName: "Public.OutlineHub",
     screenData: {
       variables: {
         // Dropdown lists — each needs EmptyListItem even when empty
@@ -278,9 +285,9 @@ function buildMinimalBody(
         SelectedUnitCD: 0,
         SelectedUnitVers: 0,
         SelectedAvailKeyNo: 0,
-        SelectedAttcModeCD: '',
-        ResultFile: { FileName: '', File: null, Link: '' },
-        legacyFilename: '',
+        SelectedAttcModeCD: "",
+        ResultFile: { FileName: "", File: null, Link: "" },
+        legacyFilename: "",
         IsLegacy: false,
         IsDirectDownload: false,
         IsDirectDwFailed: false,
@@ -288,14 +295,14 @@ function buildMinimalBody(
         // ExtractedAvails uses the full VW_OS_UNIT schema in EmptyListItem
         ExtractedAvails: { List: [], EmptyListItem: EMPTY_AVAIL_ITEM },
         IsSearchingAvails: false,
-        GUID: '',
+        GUID: "",
         _gUIDInDataFetchStatus: 1,
         unitcd: 0,
         _unitcdInDataFetchStatus: 1,
         availcd: 0,
         _availcdInDataFetchStatus: 1,
         GetSettings: {
-          CutDate: '2024-09-27',
+          CutDate: "2024-09-27",
           IsTodayBeforeCutDate: false,
           DataFetchStatus: 1,
         },
@@ -310,7 +317,13 @@ function buildMinimalBody(
 
 /** Helper: build a standard OutSystems dropdown list item with blank labels. */
 function osListItem(value: string): Record<string, string> {
-  return { Value: value, Label: '', ImageUrlOrIconClass: '', GroupName: '', Description: '' };
+  return {
+    Value: value,
+    Label: "",
+    ImageUrlOrIconClass: "",
+    GroupName: "",
+    Description: "",
+  };
 }
 
 // ── Unit lookup cache ─────────────────────────────────────────────────────────
@@ -329,21 +342,31 @@ async function getUnitLookup(): Promise<Record<string, UnitEntry>> {
   // An empty entries object means the previous fetch parsed incorrectly — treat as stale.
   const stored = await chrome.storage.local.get(UNIT_CACHE_KEY);
   const cached = stored[UNIT_CACHE_KEY] as UnitLookupCache | undefined;
-  if (cached && Object.keys(cached.entries).length > 0 && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+  if (
+    cached &&
+    Object.keys(cached.entries).length > 0 &&
+    Date.now() - cached.fetchedAt < CACHE_TTL_MS
+  ) {
     return cached.entries;
   }
 
   // Cache is missing, empty, or stale — fetch fresh unit list
   const moduleVersion = await fetchModuleVersion();
-  const body = buildMinimalBody(moduleVersion, API_VERSIONS.ScreenDataSetGetFilterUnit, {});
+  const body = buildMinimalBody(
+    moduleVersion,
+    API_VERSIONS.ScreenDataSetGetFilterUnit,
+    {},
+  );
   const rawResp = await osPost(
-    'screenservices/UnitOutlineBuilder/Public/OutlineHub/ScreenDataSetGetFilterUnit',
+    "screenservices/UnitOutlineBuilder/Public/OutlineHub/ScreenDataSetGetFilterUnit",
     body,
   );
 
   // Each list element wraps a single VW_OS_UNIT object:
   // resp.data.List.List[n] = { VW_OS_UNIT: { UNIT_CD, UNIT_VERS, UNIT_CD_UDC, ... } }
-  const resp = rawResp as { data?: { List?: OsListWrapper<{ VW_OS_UNIT: VwOsUnit }> } };
+  const resp = rawResp as {
+    data?: { List?: OsListWrapper<{ VW_OS_UNIT: VwOsUnit }> };
+  };
   const listItems = resp?.data?.List?.List ?? [];
 
   // Build compact {UNIT_CODE → {cd, vers}} map from the full unit list
@@ -390,13 +413,17 @@ async function getAvailabilityResult(
 ): Promise<{ value: string; allItems: AvailEntry[] }> {
   // Always fetch fresh — availability IDs are unit-specific and cannot be shared
   const moduleVersion = await fetchModuleVersion();
-  const body = buildMinimalBody(moduleVersion, API_VERSIONS.DataActionGetAvailabilities, {
-    IsSearchingAvails: true,
-    SelectedUnitCD: unitCd,
-    SelectedUnitVers: unitVers,
-  });
+  const body = buildMinimalBody(
+    moduleVersion,
+    API_VERSIONS.DataActionGetAvailabilities,
+    {
+      IsSearchingAvails: true,
+      SelectedUnitCD: unitCd,
+      SelectedUnitVers: unitVers,
+    },
+  );
   const resp = (await osPost(
-    'screenservices/UnitOutlineBuilder/Public/OutlineHub/DataActionGetAvailabilities',
+    "screenservices/UnitOutlineBuilder/Public/OutlineHub/DataActionGetAvailabilities",
     body,
   )) as { data?: { Avails_dd?: OsListWrapper<AvailEntry> } };
 
@@ -406,8 +433,8 @@ async function getAvailabilityResult(
   // Find the Bentley Perth Internal entry for the requested semester + year
   let value: string | undefined;
   for (const avail of allItems) {
-    const label = avail.Label ?? '';
-    if (!label.includes('Bentley Perth')) continue;
+    const label = avail.Label ?? "";
+    if (!label.includes("Bentley Perth")) continue;
 
     // Match labels like: "2026 Semester 1, [Internal] Bentley Perth Campus"
     const semMatch = label.match(/(\d{4})\s+Semester\s+(\d)/);
@@ -457,12 +484,8 @@ async function fetchUobOutline(
 
   // Step 3: get the availability Value string AND the full avails list for this unit.
   // The unit CD is required so the server populates Avails_dd in the response.
-  const { value: availValue, allItems: allAvailItems } = await getAvailabilityResult(
-    semester,
-    year,
-    unitEntry.cd,
-    unitEntry.vers,
-  );
+  const { value: availValue, allItems: allAvailItems } =
+    await getAvailabilityResult(semester, year, unitEntry.cd, unitEntry.vers);
 
   // Step 4: build the request body.
   //
@@ -475,26 +498,32 @@ async function fetchUobOutline(
   // (~6k items). filterList_avails must also contain all the unit's avail
   // entries; selectionList_* fields then narrow to the target offering.
   const unitValue = `${unitEntry.cd},${unitEntry.vers}`;
-  const availId = parseInt(availValue.split(',')[0]);
-  const availMode = availValue.split(',')[1] ?? 'INT';
+  const availId = parseInt(availValue.split(",")[0]);
+  const availMode = availValue.split(",")[1] ?? "INT";
 
-  const allUnitsFilter = Object.values(lookup).map((u) => osListItem(`${u.cd},${u.vers}`));
+  const allUnitsFilter = Object.values(lookup).map((u) =>
+    osListItem(`${u.cd},${u.vers}`),
+  );
   const allAvailsFilter = allAvailItems.map((a) => osListItem(a.Value));
 
-  const body = buildMinimalBody(moduleVersion, API_VERSIONS.ScreenDataSetGetNew, {
-    filterList_units: { List: allUnitsFilter },
-    selectionList_units: { List: [osListItem(unitValue)] },
-    filterList_avails: { List: allAvailsFilter },
-    selectionList_avails: { List: [osListItem(availValue)] },
-    SelectedUnitCD: unitEntry.cd,
-    SelectedUnitVers: unitEntry.vers,
-    SelectedAvailKeyNo: availId,
-    SelectedAttcModeCD: availMode,
-  });
+  const body = buildMinimalBody(
+    moduleVersion,
+    API_VERSIONS.ScreenDataSetGetNew,
+    {
+      filterList_units: { List: allUnitsFilter },
+      selectionList_units: { List: [osListItem(unitValue)] },
+      filterList_avails: { List: allAvailsFilter },
+      selectionList_avails: { List: [osListItem(availValue)] },
+      SelectedUnitCD: unitEntry.cd,
+      SelectedUnitVers: unitEntry.vers,
+      SelectedAvailKeyNo: availId,
+      SelectedAttcModeCD: availMode,
+    },
+  );
 
   // Step 5: POST to ScreenDataSetGetNew
   const resp = (await osPost(
-    'screenservices/UnitOutlineBuilder/Public/OutlineHub/ScreenDataSetGetNew',
+    "screenservices/UnitOutlineBuilder/Public/OutlineHub/ScreenDataSetGetNew",
     body,
   )) as {
     hasModuleVersionChanged?: boolean;
@@ -504,8 +533,8 @@ async function fetchUobOutline(
 
   if (resp.hasModuleVersionChanged || resp.hasApiVersionChanged) {
     console.warn(
-      '[outlineApi] API version mismatch detected in response; ' +
-        'data should still be valid. Consider updating HARDCODED_API_VERSION.',
+      "[outlineApi] API version mismatch detected in response; " +
+        "data should still be valid. Consider updating HARDCODED_API_VERSION.",
     );
   }
 
@@ -545,10 +574,16 @@ export interface OutlineData {
   asTask: string;
   /** Raw PC_TEXT HTML table string from the API. */
   pcText: string;
-  /** AS_TASK parsed into {title, weight?} objects. */
-  asTaskItems: Array<{ title: string; weight?: number }>;
+  /** AS_TASK parsed into {title, weight?, outcomes?} objects. */
+  asTaskItems: Array<{ title: string; weight?: number; outcomes?: string }>;
   /** Final merged PendingDeadline array (same as what the confirmation UI receives). */
   parsed: PendingDeadline[];
+  /**
+   * All fields returned by the API for this outline — includes AS_TASK and PC_TEXT
+   * plus any additional fields (e.g. extra schedule tables) that the UI exposes
+   * but are not yet extracted by the parser. Used by the test panel for discovery.
+   */
+  rawOutline: Record<string, unknown>;
 }
 
 /**
@@ -565,10 +600,11 @@ export async function fetchOutlineData(
   const code = unitCode.trim().toUpperCase();
   const outline = await fetchUobOutline(code, semester, year);
   return {
-    asTask: outline.AS_TASK ?? '',
-    pcText: outline.PC_TEXT ?? '',
-    asTaskItems: parseAsTask(outline.AS_TASK ?? ''),
+    asTask: outline.AS_TASK ?? "",
+    pcText: outline.PC_TEXT ?? "",
+    asTaskItems: parseAsTask(outline.AS_TASK ?? ""),
     parsed: outlineToDeadlines(outline, code, semester, year),
+    rawOutline: outline as unknown as Record<string, unknown>,
   };
 }
 

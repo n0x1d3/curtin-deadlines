@@ -1,9 +1,9 @@
 // ── ICS (iCalendar) parser and deadline matcher ───────────────────────────────
 // Pure parsing + matching logic. No Chrome APIs, no DOM access.
 
-import type { IcsEvent, IcsMatch, TimetableInfo, Deadline } from '../types';
-import { extractSingleWeek } from '../domain/deadlines';
-import { weekToDate } from '../utils/getDates';
+import type { IcsEvent, IcsMatch, TimetableInfo, Deadline } from "../types";
+import { extractSingleWeek } from "../domain/deadlines";
+import { weekToDate } from "../utils/getDates";
 
 // ── Keyword list ──────────────────────────────────────────────────────────────
 
@@ -13,7 +13,14 @@ import { weekToDate } from '../utils/getDates';
  * 'high'. Intentionally broad (includes "test", "quiz") for similarity detection.
  */
 export const EXAM_KEYWORDS = [
-  'exam', 'final', 'test', 'quiz', 'assessment', 'mid-sem', 'mid sem', 'midsem',
+  "exam",
+  "final",
+  "test",
+  "quiz",
+  "assessment",
+  "mid-sem",
+  "mid sem",
+  "midsem",
 ];
 
 // ── ICS parsing ───────────────────────────────────────────────────────────────
@@ -30,12 +37,12 @@ export function parseIcs(text: string): IcsEvent[] {
   const events: IcsEvent[] = [];
 
   // Split on VEVENT boundaries — each block is one calendar event
-  const blocks = text.split('BEGIN:VEVENT');
+  const blocks = text.split("BEGIN:VEVENT");
   for (let b = 1; b < blocks.length; b++) {
-    const block = blocks[b].split('END:VEVENT')[0];
+    const block = blocks[b].split("END:VEVENT")[0];
     const lines = block.split(/\r?\n/);
 
-    let summary = '';
+    let summary = "";
     let dtstart: Date | null = null;
     let dtend: Date | undefined;
 
@@ -43,11 +50,11 @@ export function parseIcs(text: string): IcsEvent[] {
       // Handle iCal line folding: continuation lines start with a space/tab
       const line = rawLine.trimEnd();
 
-      if (line.startsWith('SUMMARY:')) {
-        summary = line.slice('SUMMARY:'.length).trim();
-      } else if (line.startsWith('DTSTART')) {
+      if (line.startsWith("SUMMARY:")) {
+        summary = line.slice("SUMMARY:".length).trim();
+      } else if (line.startsWith("DTSTART")) {
         dtstart = parseIcsDate(line);
-      } else if (line.startsWith('DTEND')) {
+      } else if (line.startsWith("DTEND")) {
         const parsed = parseIcsDate(line);
         if (parsed) dtend = parsed;
       }
@@ -80,7 +87,7 @@ export function parseIcs(text: string): IcsEvent[] {
  */
 export function parseIcsDate(line: string): Date | null {
   // Extract the value part (everything after the last colon in the property line)
-  const colonIdx = line.lastIndexOf(':');
+  const colonIdx = line.lastIndexOf(":");
   if (colonIdx === -1) return null;
   const value = line.slice(colonIdx + 1).trim();
 
@@ -100,9 +107,11 @@ export function parseIcsDate(line: string): Date | null {
   }
 
   // Local datetime with TZID: "20261109T090000" (Perth = UTC+8, WA has no DST)
-  const localMatch = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(value);
+  const localMatch = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(
+    value,
+  );
   if (localMatch) {
-    const isPerth = line.includes('Australia/Perth');
+    const isPerth = line.includes("Australia/Perth");
     if (isPerth) {
       // UTC+8 — subtract 8 hours to get UTC
       return new Date(
@@ -152,7 +161,10 @@ export function parseIcsDate(line: string): Date | null {
  *
  * Returns at most one match per deadline (the highest-scoring event).
  */
-export function matchIcsToDeadlines(events: IcsEvent[], deadlines: Deadline[]): IcsMatch[] {
+export function matchIcsToDeadlines(
+  events: IcsEvent[],
+  deadlines: Deadline[],
+): IcsMatch[] {
   // Only consider deadlines where the date is TBA
   const tbaDeadlines = deadlines.filter((d) => d.dateTBA);
   const matches: IcsMatch[] = [];
@@ -166,33 +178,35 @@ export function matchIcsToDeadlines(events: IcsEvent[], deadlines: Deadline[]): 
 
     // Score each candidate — prefer events where a keyword appears in both sides
     let bestMatch: IcsEvent | null = null;
-    let bestConfidence: 'high' | 'low' = 'low';
+    let bestConfidence: "high" | "low" = "low";
 
     for (const ev of candidates) {
-      const evLower    = ev.summary.toLowerCase();
+      const evLower = ev.summary.toLowerCase();
       const titleLower = deadline.title.toLowerCase();
 
       const keywordInSummary = EXAM_KEYWORDS.some((kw) => evLower.includes(kw));
-      const keywordInTitle   = EXAM_KEYWORDS.some((kw) => titleLower.includes(kw));
+      const keywordInTitle = EXAM_KEYWORDS.some((kw) =>
+        titleLower.includes(kw),
+      );
 
-      const confidence: 'high' | 'low' =
-        keywordInSummary && keywordInTitle ? 'high' : 'low';
+      const confidence: "high" | "low" =
+        keywordInSummary && keywordInTitle ? "high" : "low";
 
       // Prefer 'high' over 'low'; take the first high match, or first low if no high
-      if (!bestMatch || (confidence === 'high' && bestConfidence === 'low')) {
-        bestMatch      = ev;
+      if (!bestMatch || (confidence === "high" && bestConfidence === "low")) {
+        bestMatch = ev;
         bestConfidence = confidence;
       }
     }
 
     if (bestMatch) {
       matches.push({
-        deadlineId:    deadline.id,
+        deadlineId: deadline.id,
         deadlineTitle: deadline.title,
-        deadlineUnit:  deadline.unit,
-        event:         bestMatch,
-        resolvedDate:  bestMatch.dtstart,
-        confidence:    bestConfidence,
+        deadlineUnit: deadline.unit,
+        event: bestMatch,
+        resolvedDate: bestMatch.dtstart,
+        confidence: bestConfidence,
       });
     }
   }
@@ -225,15 +239,15 @@ export function matchIcsByWeekAndSession(
 
   // Session-type keyword groups — first match in each group wins
   const SESSION_TYPES: { keys: string[]; tag: string }[] = [
-    { keys: ['lab', 'laboratory', 'practical', 'prac'], tag: 'lab' },
-    { keys: ['workshop'],                               tag: 'workshop' },
-    { keys: ['tutorial', 'tut'],                        tag: 'tutorial' },
-    { keys: ['lecture', 'lect'],                        tag: 'lecture' },
+    { keys: ["lab", "laboratory", "practical", "prac"], tag: "lab" },
+    { keys: ["workshop"], tag: "workshop" },
+    { keys: ["tutorial", "tut"], tag: "tutorial" },
+    { keys: ["lecture", "lect"], tag: "lecture" },
   ];
 
   for (const deadline of tbaDeadlines) {
-    const weekLabelLower = (deadline.weekLabel ?? '').toLowerCase();
-    const titleLower     = deadline.title.toLowerCase();
+    const weekLabelLower = (deadline.weekLabel ?? "").toLowerCase();
+    const titleLower = deadline.title.toLowerCase();
 
     // Step A: extract a single teaching week number — ranges and "Fortnightly" → skip
     const week = extractSingleWeek(deadline.weekLabel);
@@ -242,7 +256,7 @@ export function matchIcsByWeekAndSession(
     // Step B: detect session type from title and/or weekLabel
     let sessionTag: string | null = null;
     for (const { keys, tag } of SESSION_TYPES) {
-      const inTitle     = keys.some((k) => titleLower.includes(k));
+      const inTitle = keys.some((k) => titleLower.includes(k));
       const inWeekLabel = keys.some((k) => weekLabelLower.includes(k));
       if (inTitle || inWeekLabel) {
         sessionTag = tag;
@@ -251,18 +265,21 @@ export function matchIcsByWeekAndSession(
     }
 
     // Step C: extract "N hours after" offset from weekLabel
-    const hoursMatch = /(\d+)\s*hours?\s*(after|following)/i.exec(deadline.weekLabel ?? '');
+    const hoursMatch = /(\d+)\s*hours?\s*(after|following)/i.exec(
+      deadline.weekLabel ?? "",
+    );
     const hoursAfter = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
 
     // Step D: compute the Mon–Sun window for this teaching week
     const weekStart = weekToDate(semester, year, week, 0); // Monday 00:00 local
-    const weekEnd   = new Date(weekStart);
+    const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6); // advance to Sunday
     weekEnd.setHours(23, 59, 59, 999);
 
     // Step E: find candidate ICS events within the week window for this unit
     const candidates = events.filter((ev) => {
-      if (ev.unitCode?.toUpperCase() !== deadline.unit.toUpperCase()) return false;
+      if (ev.unitCode?.toUpperCase() !== deadline.unit.toUpperCase())
+        return false;
       return ev.dtstart >= weekStart && ev.dtstart <= weekEnd;
     });
     if (candidates.length === 0) continue;
@@ -271,7 +288,7 @@ export function matchIcsByWeekAndSession(
     type Scored = { ev: IcsEvent; score: number };
     const scored: Scored[] = candidates.map((ev) => {
       const evLower = ev.summary.toLowerCase();
-      const hasTag  = sessionTag
+      const hasTag = sessionTag
         ? SESSION_TYPES.find((s) => s.tag === sessionTag)!.keys.some((k) =>
             evLower.includes(k),
           )
@@ -279,8 +296,11 @@ export function matchIcsByWeekAndSession(
       return { ev, score: hasTag ? 1 : 0 };
     });
 
-    scored.sort((a, b) => b.score - a.score || a.ev.dtstart.getTime() - b.ev.dtstart.getTime());
-    const best      = scored[0].ev;
+    scored.sort(
+      (a, b) =>
+        b.score - a.score || a.ev.dtstart.getTime() - b.ev.dtstart.getTime(),
+    );
+    const best = scored[0].ev;
     const bestScore = scored[0].score;
 
     // Step G: compute resolvedDate with optional hours offset
@@ -300,13 +320,14 @@ export function matchIcsByWeekAndSession(
     }
 
     // 'high' only when a session keyword matched the event summary; 'low' otherwise
-    const confidence: 'high' | 'low' = sessionTag && bestScore === 1 ? 'high' : 'low';
+    const confidence: "high" | "low" =
+      sessionTag && bestScore === 1 ? "high" : "low";
 
     matches.push({
-      deadlineId:    deadline.id,
+      deadlineId: deadline.id,
       deadlineTitle: deadline.title,
-      deadlineUnit:  deadline.unit,
-      event:         best,
+      deadlineUnit: deadline.unit,
+      event: best,
       resolvedDate,
       confidence,
       matchReason,
@@ -328,17 +349,18 @@ export function matchIcsByWeekAndSession(
  */
 export function detectTimetableUnits(events: IcsEvent[]): TimetableInfo {
   // Collect unique unit codes across all events
-  const units = [...new Set(
-    events.map((e) => e.unitCode).filter((c): c is string => !!c),
-  )].sort();
+  const units = [
+    ...new Set(events.map((e) => e.unitCode).filter((c): c is string => !!c)),
+  ].sort();
 
   // Find the earliest event date to infer semester and year
-  const earliest = events.reduce<Date | null>(
-    (min, e) => (!min || e.dtstart < min ? e.dtstart : min),
-    null,
-  ) ?? new Date();
+  const earliest =
+    events.reduce<Date | null>(
+      (min, e) => (!min || e.dtstart < min ? e.dtstart : min),
+      null,
+    ) ?? new Date();
 
-  const year  = earliest.getFullYear();
+  const year = earliest.getFullYear();
   const month = earliest.getMonth() + 1; // 1-based
 
   // Semester 1 runs Feb–Jun, Semester 2 runs Jul–Nov

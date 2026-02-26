@@ -1,8 +1,8 @@
 // ── JSON backup: export and import deadlines ──────────────────────────────────
 // Caller is responsible for re-rendering the UI after importJSON resolves.
 
-import type { Deadline } from '../types';
-import { loadDeadlines, saveDeadlines } from './index';
+import type { Deadline } from "../types";
+import { loadDeadlines, saveDeadlines } from "./index";
 
 /**
  * Serialise all deadlines to JSON and trigger a file download.
@@ -10,11 +10,11 @@ import { loadDeadlines, saveDeadlines } from './index';
  */
 export function exportJSON(deadlines: Deadline[]): void {
   const json = JSON.stringify(deadlines, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
-  a.href     = url;
+  const a = document.createElement("a");
+  a.href = url;
   a.download = `curtin-deadlines-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
 
@@ -35,19 +35,20 @@ export async function importJSON(file: File): Promise<void> {
         const parsed = JSON.parse(reader.result as string);
 
         // Validate that it's an array of deadline-shaped objects
-        if (!Array.isArray(parsed)) throw new Error('Expected a JSON array of deadlines.');
+        if (!Array.isArray(parsed))
+          throw new Error("Expected a JSON array of deadlines.");
         for (const item of parsed) {
           if (!item.id || !item.title || !item.unit || !item.dueDate) {
             throw new Error(
-              'One or more items are missing required fields (id, title, unit, dueDate).',
+              "One or more items are missing required fields (id, title, unit, dueDate).",
             );
           }
         }
 
         // Merge: load existing, remove any with same id, then push imported
-        const existing    = await loadDeadlines();
+        const existing = await loadDeadlines();
         const importedIds = new Set((parsed as Deadline[]).map((d) => d.id));
-        const merged      = existing
+        const merged = existing
           .filter((d) => !importedIds.has(d.id))
           .concat(parsed as Deadline[]);
         merged.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
@@ -58,7 +59,7 @@ export async function importJSON(file: File): Promise<void> {
         reject(err);
       }
     };
-    reader.onerror = () => reject(new Error('Failed to read file.'));
+    reader.onerror = () => reject(new Error("Failed to read file."));
     reader.readAsText(file);
   });
 }

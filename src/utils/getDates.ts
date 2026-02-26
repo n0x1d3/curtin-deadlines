@@ -126,7 +126,9 @@ function calculateDates2026Plus(year: number): SemesterDates {
 }
 
 function calculateDates(year: number): SemesterDates {
-  return year >= 2026 ? calculateDates2026Plus(year) : calculateDatesPre2026(year);
+  return year >= 2026
+    ? calculateDates2026Plus(year)
+    : calculateDatesPre2026(year);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -157,7 +159,12 @@ export function getSemesterWeeks(year: number, semester: 1 | 2): number {
  *
  * Example: weekToDate(1, 2026, 5) → Mon 16 Mar 2026
  */
-export function weekToDate(semester: 1 | 2, year: number, week: number, dayOffset = 0): Date {
+export function weekToDate(
+  semester: 1 | 2,
+  year: number,
+  week: number,
+  dayOffset = 0,
+): Date {
   const semData = getDates(year)[semester];
   // Build semester start date from the {month, day} stored in overrides/formula
   const semStart = new Date(year, semData.start.month - 1, semData.start.day);
@@ -168,18 +175,30 @@ export function weekToDate(semester: 1 | 2, year: number, week: number, dayOffse
 
 /** Month abbreviations for parsing date strings like "3rd May 23:59". */
 export const MONTH_NAMES: Record<string, number> = {
-  january: 0, jan: 0,
-  february: 1, feb: 1,
-  march: 2, mar: 2,
-  april: 3, apr: 3,
+  january: 0,
+  jan: 0,
+  february: 1,
+  feb: 1,
+  march: 2,
+  mar: 2,
+  april: 3,
+  apr: 3,
   may: 4,
-  june: 5, jun: 5,
-  july: 6, jul: 6,
-  august: 7, aug: 7,
-  september: 8, sep: 8, sept: 8,
-  october: 9, oct: 9,
-  november: 10, nov: 10,
-  december: 11, dec: 11,
+  june: 5,
+  jun: 5,
+  july: 6,
+  jul: 6,
+  august: 7,
+  aug: 7,
+  september: 8,
+  sep: 8,
+  sept: 8,
+  october: 9,
+  oct: 9,
+  november: 10,
+  nov: 10,
+  december: 11,
+  dec: 11,
 };
 
 /**
@@ -219,7 +238,28 @@ export function parseOrdinalDate(dayStr: string, year: number): Date | null {
     }
   }
 
-  // ── 2. Null-byte-placeholder ordinal date (consecutive hashes) ──────────────
+  // ── 2. Space-separated double-hash placeholder ("# #rd May") ────────────────
+  // Checked BEFORE the consecutive-hash pattern below — the consecutive-hash
+  // regex would otherwise grab the second '#' alone (e.g. matching '#nd May'
+  // inside '# #nd May'), producing the wrong single-digit result.
+  // Some Curtin PDFs emit two-digit null-byte days with a space between the two
+  // placeholder chars (e.g. "# #rd May" instead of "##rd May").
+  // Only "nd" (→ 22nd) and "rd" (→ 23rd) are unambiguous for two-digit cases.
+  const spacedPlaceholder = s.match(/#\s+#\s*(st|nd|rd)\s+([A-Za-z]+)/i);
+  if (spacedPlaceholder) {
+    const suffix = spacedPlaceholder[1].toLowerCase();
+    const monthIdx =
+      MONTH_NAMES[spacedPlaceholder[2].slice(0, 3).toLowerCase()];
+    if (monthIdx !== undefined) {
+      if (suffix === "nd") return new Date(year, monthIdx, 22);
+      if (suffix === "rd") return new Date(year, monthIdx, 23);
+      // "st" → 21 or 31: ambiguous — return null immediately so the
+      // consecutive-hash pattern below cannot grab the second '#' alone.
+      return null;
+    }
+  }
+
+  // ── 3. Null-byte-placeholder ordinal date (consecutive hashes) ──────────────
   // Matches: "#rd May", "##nd June", etc. — '#' chars are null-byte placeholders
   const placeholder = s.match(/(#+)\s*(st|nd|rd)\s+([A-Za-z]+)/i);
   if (placeholder) {
@@ -229,33 +269,15 @@ export function parseOrdinalDate(dayStr: string, year: number): Date | null {
     if (monthIdx !== undefined) {
       let day: number | null = null;
       if (count === 1) {
-        if (suffix === 'st') day = 1;
-        else if (suffix === 'nd') day = 2;
-        else if (suffix === 'rd') day = 3;
+        if (suffix === "st") day = 1;
+        else if (suffix === "nd") day = 2;
+        else if (suffix === "rd") day = 3;
       } else if (count === 2) {
         // Two-digit numbers: only "nd" and "rd" are unambiguous
-        if (suffix === 'nd') day = 22;
-        else if (suffix === 'rd') day = 23;
+        if (suffix === "nd") day = 22;
+        else if (suffix === "rd") day = 23;
         // "st" → 21 or 31: ambiguous, skip
       }
-      if (day !== null) return new Date(year, monthIdx, day);
-    }
-  }
-
-  // ── 3. Space-separated double-hash placeholder ("# #rd May") ────────────────
-  // Some Curtin PDFs emit two-digit null-byte days with a space between the two
-  // placeholder chars (e.g. "# #rd May" instead of "##rd May"). The consecutive
-  // hash regex above misses these — this matcher handles them explicitly.
-  // Only "nd" (→ 22nd) and "rd" (→ 23rd) are unambiguous for two-digit "th"-free cases.
-  const spacedPlaceholder = s.match(/#\s+#\s*(st|nd|rd)\s+([A-Za-z]+)/i);
-  if (spacedPlaceholder) {
-    const suffix = spacedPlaceholder[1].toLowerCase();
-    const monthIdx = MONTH_NAMES[spacedPlaceholder[2].slice(0, 3).toLowerCase()];
-    if (monthIdx !== undefined) {
-      let day: number | null = null;
-      if (suffix === 'nd') day = 22;
-      else if (suffix === 'rd') day = 23;
-      // "st" → 21 or 31: ambiguous, skip
       if (day !== null) return new Date(year, monthIdx, day);
     }
   }
