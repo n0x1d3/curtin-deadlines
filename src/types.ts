@@ -19,6 +19,12 @@ export interface Deadline {
   weekLabel?: string;
   /** Assessment weight as a percentage (0–100), parsed from the "%" column in the schedule */
   weight?: number;
+  /** Unit Learning Outcomes assessed, e.g. "1,2,4" — parsed from the schedule table */
+  outcomes?: string;
+  /** Whether late submissions are accepted for this assessment (from the schedule table) */
+  lateAccepted?: boolean;
+  /** Whether assessment extension applications are considered (from the schedule table) */
+  extensionConsidered?: boolean;
   /**
    * How this deadline was created:
    *   'manual' = typed by the user in the add form
@@ -27,7 +33,7 @@ export interface Deadline {
    *   'pdf'    = parsed from a dropped unit outline PDF
    *   'ics'    = resolved from an imported .ics timetable file
    */
-  source: 'manual' | 'auto' | 'api' | 'pdf' | 'ics';
+  source: "manual" | "auto" | "api" | "pdf" | "ics";
   /** ISO 8601 timestamp for when this deadline was added */
   addedAt: string;
   /**
@@ -69,6 +75,12 @@ export interface PendingDeadline {
   calSource?: boolean;
   /** Assessment weight as a percentage (0–100), parsed from the "%" column in the schedule */
   weight?: number;
+  /** Unit Learning Outcomes assessed, e.g. "1,2,4" — parsed from the schedule table */
+  outcomes?: string;
+  /** Whether late submissions are accepted for this assessment (from the schedule table) */
+  lateAccepted?: boolean;
+  /** Whether assessment extension applications are considered (from the schedule table) */
+  extensionConsidered?: boolean;
 }
 
 // ── App settings ──────────────────────────────────────────────────────────────
@@ -78,17 +90,17 @@ export interface AppSettings {
   /** Pre-fills all semester dropdowns (API section, manual form, TBA fill-ins). */
   defaultSemester: 1 | 2;
   /** Controls where overdue cards appear relative to upcoming ones. */
-  overduePosition: 'top' | 'bottom';
+  overduePosition: "top" | "bottom";
 }
 
 // ── ICS types ─────────────────────────────────────────────────────────────────
 
 /** A single event extracted from an .ics (iCalendar) file. */
 export interface IcsEvent {
-  summary: string;       // raw SUMMARY value
-  dtstart: Date;         // parsed start date/time
-  dtend?: Date;          // parsed end date/time (optional)
-  unitCode?: string;     // first Curtin unit code found in summary, e.g. "COMP1005"
+  summary: string; // raw SUMMARY value
+  dtstart: Date; // parsed start date/time
+  dtend?: Date; // parsed end date/time (optional)
+  unitCode?: string; // first Curtin unit code found in summary, e.g. "COMP1005"
 }
 
 /** One resolved match: a TBA deadline paired with an ICS event. */
@@ -99,16 +111,16 @@ export interface IcsMatch {
   event: IcsEvent;
   /** The date to apply — may differ from event.dtstart when a "N hours after" offset is used. */
   resolvedDate: Date;
-  confidence: 'high' | 'low';
+  confidence: "high" | "low";
   /** Human-readable description of how the match was made, e.g. "Week 5 lab". */
   matchReason?: string;
 }
 
 /** Units and semester/year extracted from a timetable .ics file. */
 export interface TimetableInfo {
-  units: string[];    // unique Curtin unit codes found across all events
-  semester: 1 | 2;   // inferred from earliest event date (Feb–Jun = S1, Jul–Nov = S2)
-  year: number;       // year of the earliest event
+  units: string[]; // unique Curtin unit codes found across all events
+  semester: 1 | 2; // inferred from earliest event date (Feb–Jun = S1, Jul–Nov = S2)
+  year: number; // year of the earliest event
 }
 
 // ── Message commands ──────────────────────────────────────────────────────────
@@ -118,7 +130,7 @@ export interface TimetableInfo {
  */
 export const enum command {
   /** Background service worker triggers a .ics file download */
-  downloadICS = 'downloadICS',
+  downloadICS = "downloadICS",
   /** Content script reports Blackboard deadlines to the side panel */
-  scrapeResult = 'scrapeResult',
+  scrapeResult = "scrapeResult",
 }
