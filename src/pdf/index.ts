@@ -105,11 +105,27 @@ export function mergeWithCalendar(
         return false;
       });
       if (!resolvedDup) {
-        // Inherit weight (and meta) from an existing item with the same title so that
-        // calendar-only instances of recurring assessments (e.g. Practical Test 2-5)
-        // carry the same weight as the schedule item that was promoted earlier.
+        // Inherit weight (and meta) from a schedule item with matching title.
+        // titlesMatch handles exact/prefix/ligature cases.
+        // sharedKeyword handles cases where the calendar uses a sub-title that
+        // differs from the schedule's broader title — e.g. "Lab A Report" is a
+        // component of "Technical report writing and professional attributes";
+        // both share the 5-char keyword "report".
+        const sharedKeyword = (a: string, b: string): boolean => {
+          const words = (s: string) =>
+            s
+              .toLowerCase()
+              .replace(/[^a-z ]/g, "")
+              .split(/\s+/)
+              .filter((w) => w.length >= 5);
+          const wa = words(a);
+          return wa.some((w) => words(b).includes(w));
+        };
         const proto = merged.find(
-          (s) => titlesMatch(s.title, calItem.title) && s.weight !== undefined,
+          (s) =>
+            (titlesMatch(s.title, calItem.title) ||
+              sharedKeyword(s.title, calItem.title)) &&
+            s.weight !== undefined,
         );
         merged.push(
           proto

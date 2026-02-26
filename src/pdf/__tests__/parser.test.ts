@@ -667,6 +667,46 @@ describe("mergeWithCalendar", () => {
     expect(numbered.every((r) => r.weight === 20)).toBe(true);
   });
 
+  it("inherits weight via shared keyword when calendar sub-title differs from schedule title", () => {
+    // 'Lab A Report' is a component of 'Technical report writing and professional attributes';
+    // they share the keyword 'report' — the lab items should inherit the 29% weight.
+    const schedule = [
+      pending({
+        title: "Technical report writing and professional attributes",
+        unit: "PRRE1003",
+        isTBA: true,
+        weight: 29,
+      }),
+    ];
+    const calendar = [
+      pending({
+        title: "Lab A report",
+        unit: "PRRE1003",
+        week: 4,
+        weekLabel: "Week 4",
+        resolvedDate: new Date(2026, 2, 9),
+        isTBA: false,
+        calSource: true,
+      }),
+      pending({
+        title: "Lab B report",
+        unit: "PRRE1003",
+        week: 7,
+        weekLabel: "Week 7",
+        resolvedDate: new Date(2026, 2, 30),
+        isTBA: false,
+        calSource: true,
+      }),
+    ];
+
+    const result = mergeWithCalendar(schedule, calendar);
+    // TBA item stays (not matched by lab title), plus 2 calendar items appended
+    expect(result).toHaveLength(3);
+    const labItems = result.filter((r) => r.title.startsWith("Lab"));
+    expect(labItems).toHaveLength(2);
+    expect(labItems.every((r) => r.weight === 29)).toBe(true);
+  });
+
   it("matches 'Sem Test' to 'Semester Test' via the Sem→Semester normalisation", () => {
     // norm() expands \bSem\b → Semester before comparing
     const schedule = [
