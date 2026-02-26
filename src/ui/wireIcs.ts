@@ -157,9 +157,6 @@ function showIcsSection(
 export function wireIcsSection(deps: IcsDeps): void {
   const { showConfirmation, renderDeadlines } = deps;
 
-  const icsBtn = document.getElementById("ics-btn")!;
-  const icsInput = document.getElementById("ics-input") as HTMLInputElement;
-
   /** Helper: close the ICS section and return to the main panel. */
   function closeIcs(): void {
     document.getElementById("ics-section")!.classList.add("hidden");
@@ -168,17 +165,14 @@ export function wireIcsSection(deps: IcsDeps): void {
 
   /**
    * Parse a .ics file, detect timetable unit codes, match exam events to TBA
-   * deadlines, then show the ICS section or an inline status if nothing matched.
+   * deadlines, then show the ICS section or a toast if nothing matched.
    */
   async function handleIcsFile(file: File): Promise<void> {
     const text = await file.text();
     const events = parseIcs(text);
 
     if (events.length === 0) {
-      icsBtn.textContent = "No events found in .ics file.";
-      setTimeout(() => {
-        icsBtn.textContent = "Import .ics timetable";
-      }, 3000);
+      showToast("No events found in .ics file.", "error");
       return;
     }
 
@@ -208,25 +202,15 @@ export function wireIcsSection(deps: IcsDeps): void {
 
     // Nothing useful in this file
     if (timetable.units.length === 0 && combined.length === 0) {
-      icsBtn.textContent = "No matching items found.";
-      setTimeout(() => {
-        icsBtn.textContent = "Import .ics timetable";
-      }, 3000);
+      showToast(
+        "No matching deadlines or unit codes found in this timetable.",
+        "info",
+      );
       return;
     }
 
     showIcsSection(timetable.units.length > 0 ? timetable : null, combined);
   }
-
-  // ── Inline "Import .ics timetable" button ─────────────────────────────────
-  icsBtn.addEventListener("click", () => icsInput.click());
-
-  icsInput.addEventListener("change", async () => {
-    const file = icsInput.files?.[0];
-    if (!file) return;
-    icsInput.value = "";
-    await handleIcsFile(file);
-  });
 
   // ── Drop-zone extension: capture .ics drops before processFiles() sees them ─
   // We listen in the capture phase so this runs before the PDF handler's bubble

@@ -74,23 +74,15 @@
         </div>
 
       <!-- PDF upload / drag-drop zone -->
-        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Drop unit outline PDF here">
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Drop unit outline PDF or timetable here">
           <div class="drop-zone-inner">
             <span class="drop-icon">📄</span>
-            <span class="drop-primary">Drop unit outline PDF here</span>
-            <span class="drop-sub">or click to browse · up to 4 PDFs</span>
+            <span class="drop-primary">Drop unit outline PDF or timetable here</span>
+            <span class="drop-sub">or click to browse · PDF or .ics · up to 4 PDFs</span>
           </div>
-          <!-- Hidden file input — accepts PDF (and .ics routed separately in JS) -->
+          <!-- Hidden file input — accepts PDF and .ics (.ics routed to ICS handler in JS) -->
           <input type="file" id="file-input" accept=".pdf,.ics" multiple hidden />
         </div>
-
-        <!-- .ics timetable import hint — resolve exam TBA dates from Curtin's exam timetable -->
-        <p class="ics-hint">
-          Resolve exam dates:
-          <button id="ics-btn" class="inline-link">Import .ics timetable</button>
-          <!-- Hidden file input triggered by the button above -->
-          <input id="ics-input" type="file" accept=".ics" hidden />
-        </p>
 
         <!-- Parsing progress (hidden until PDF is loading) -->
         <div id="parse-progress" class="parse-progress hidden">
