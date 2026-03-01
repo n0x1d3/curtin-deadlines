@@ -1,7 +1,7 @@
 # PLAN.md — Codebase Compliance Cleanup
 
 _Last updated: 2026-03-01_
-_Status: DRAFT_
+_Status: IMPLEMENTED_
 _Spec: See SPEC.md_
 
 ## Approach
@@ -339,3 +339,4 @@ After split, `outlineApi.ts` should be ~160 lines.
 | Round | Reviewer | Verdict | Date |
 |-------|----------|---------|------|
 | 1 | code-reviewer | NEEDS FIXES | 2026-03-01 |
+| 2 | Codex | IMPLEMENTED | 2026-03-01 |
