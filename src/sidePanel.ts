@@ -7,11 +7,18 @@ import { showToast } from "./ui/toast";
 
 import type { Deadline, PendingDeadline } from "./types";
 import { command } from "./types";
-import { weekToDate } from "./utils/getDates";
+import { weekToDate, getSemesterWeeks } from "./utils/getDates";
 import { fetchOutline } from "./api/outlineApi";
 
 // Storage helpers — Chrome storage reads/writes
-import { loadDeadlines, addDeadline, loadSettings } from "./storage";
+import {
+  loadDeadlines,
+  addDeadline,
+  loadSettings,
+  loadTimetableSessions,
+  setDeadlineDate,
+} from "./storage";
+import type { TimetableSession } from "./types";
 
 // Date and countdown formatting utilities
 import { escapeHtml, truncate, formatDate, defaultYear } from "./utils/format";
@@ -184,6 +191,8 @@ async function renderDeadlines(): Promise<void> {
 
 /** Global array holding the pending deadlines shown in the confirmation section. */
 let pendingItems: PendingDeadline[] = [];
+// Timetable session data loaded once at init — used to resolve assessment day-of-week
+let timetableSessions: TimetableSession[] = [];
 
 // ── Filter / sort state ───────────────────────────────────────────────────────
 // These are module-level so they survive re-renders triggered by add/delete.
@@ -301,11 +310,11 @@ function showConfirmation(
             <div class="conf-date-info">
               ${item.weekLabel ? `<span class="conf-week-label" title="${escapeHtml(item.weekLabel)}">${escapeHtml(truncate(item.weekLabel, 30))}</span>` : ""}
               ${item.calSource ? `<span class="conf-cal-badge" title="Sourced from Program Calendar">Cal</span>` : ""}
-              ${item.weight ? `<span class="conf-weight-badge">${item.weight}%</span>` : ""}
+              ${item.weight ? `<span class="conf-weight-badge">${escapeHtml(String(item.weight))}%</span>` : ""}
               ${item.outcomes ? `<span class="conf-outcomes-badge" title="Unit Learning Outcomes assessed">LO ${escapeHtml(item.outcomes)}</span>` : ""}
               ${item.lateAccepted !== undefined ? `<span class="conf-late-badge${item.lateAccepted ? "" : " badge-no"}" title="Late submissions accepted: ${item.lateAccepted ? "Yes" : "No"}">Late: ${item.lateAccepted ? "Yes" : "No"}</span>` : ""}
               ${item.extensionConsidered !== undefined ? `<span class="conf-ext-badge${item.extensionConsidered ? "" : " badge-no"}" title="Extension considered: ${item.extensionConsidered ? "Yes" : "No"}">Ext: ${item.extensionConsidered ? "Yes" : "No"}</span>` : ""}
-              ${item.isTBA ? `<span class="conf-tba-badge">fill in ↓</span>` : ""}
+              ${item.isTBA ? `<span class="conf-tba-badge">fill in ↓</span><span class="conf-tba-preview conf-resolved hidden"></span>` : ""}
               ${resolvedText ? `<span class="conf-resolved">${escapeHtml(resolvedText)}</span>` : ""}
             </div>
             ${tbaFillHTML}
@@ -315,12 +324,68 @@ function showConfirmation(
         // Pre-fill the week input for TBA items that have a known weekLabel
         // (e.g. "Week 5" inferred from the PC_TEXT table). The user only needs
         // to confirm or adjust; no need to look it up manually.
+        // For "Weekly" items, suggest the full 13-week range as a starting point.
         if (item.isTBA) {
-          const weekInp = row.querySelector<HTMLInputElement>(".conf-week-inp");
-          if (weekInp) {
-            const hintWeek = extractSingleWeek(item.weekLabel);
-            if (hintWeek !== null) weekInp.value = String(hintWeek);
+          const weekInp =
+            row.querySelector<HTMLInputElement>(".conf-week-inp")!;
+          const semSel = row.querySelector<HTMLSelectElement>(".conf-sem-sel")!;
+          const yearInp =
+            row.querySelector<HTMLInputElement>(".conf-year-inp")!;
+
+          // Store the timetable-derived day offset so syncTbaRow and the save handler can use it
+          row.dataset.dayOffset = String(
+            resolveSessionDayOffset(
+              item.unit,
+              item.title,
+              item.weekLabel ?? "",
+            ),
+          );
+
+          // Pre-fill the week input from the weekLabel hint
+          const hintWeek = extractSingleWeek(item.weekLabel);
+          const totalWeeks = getSemesterWeeks(tbaYear, tbaSemester);
+          const teachingWeeks = totalWeeks - 2; // study + exam at the end
+          const studyWeek = totalWeeks - 1;
+          // Check if timetable data has specific weeks for this session type
+          const sessionType = detectAssessmentSessionType(
+            item.title,
+            item.weekLabel ?? "",
+          );
+          const normType = sessionType === "laboratory" ? "lab" : sessionType;
+          const matchedSession = normType
+            ? timetableSessions.find(
+                (s) => s.unit === item.unit && s.type === normType,
+              )
+            : null;
+
+          if (hintWeek !== null) {
+            weekInp.value = String(hintWeek);
+          } else if (matchedSession?.weeks?.length) {
+            // Use the exact weeks from the timetable ICS
+            weekInp.value = matchedSession.weeks.join(",");
+          } else if (
+            /\bexam(ination)?\s*(week)?\b/i.test(item.weekLabel ?? "")
+          ) {
+            // Exam period is 2 weeks — pre-fill the range so the user can narrow it
+            // down once the official exam timetable is released
+            weekInp.value = `${studyWeek},${totalWeeks}`;
+          } else if (
+            /\bstudy\s*(week|break|period)\b/i.test(item.weekLabel ?? "")
+          ) {
+            weekInp.value = String(studyWeek); // study week is second-to-last
+          } else {
+            weekInp.value = recurringWeekHint(
+              item.weekLabel ?? "",
+              teachingWeeks,
+            );
           }
+
+          // Sync badge + date preview immediately, then on every field change
+          const sync = () => syncTbaRow(row);
+          sync();
+          weekInp.addEventListener("input", sync);
+          semSel.addEventListener("change", sync);
+          yearInp.addEventListener("input", sync);
         }
 
         confirmList.appendChild(row);
@@ -330,6 +395,56 @@ function showConfirmation(
 
   mainSection.classList.add("hidden");
   confirmSection.classList.remove("hidden");
+
+  // Asynchronously inject conflict pickers after the screen is already visible.
+  // Fire-and-forget — a failure here must never prevent the confirmation screen
+  // from showing.
+  void addConflictPickers();
+}
+
+/**
+ * After the confirmation screen has been rendered synchronously, load existing
+ * deadlines and inject conflict pickers into rows that match an already-saved
+ * deadline (same unit + title). Called fire-and-forget from showConfirmation.
+ */
+async function addConflictPickers(): Promise<void> {
+  const existingDeadlines = await loadDeadlines();
+  if (existingDeadlines.length === 0) return;
+
+  const rows = document.querySelectorAll<HTMLElement>(
+    "#confirm-list .confirm-row",
+  );
+  for (const row of rows) {
+    const idx = parseInt(row.dataset.idx ?? "0", 10);
+    const item = pendingItems[idx];
+    if (!item || item.isTBA || !item.resolvedDate) continue;
+
+    const conflictDeadline = existingDeadlines.find(
+      (e) =>
+        !e.dateTBA &&
+        e.unit.toUpperCase() === item.unit.toUpperCase() &&
+        e.title.toLowerCase() === item.title.toLowerCase(),
+    );
+    if (!conflictDeadline) continue;
+
+    row.dataset.conflictId = conflictDeadline.id;
+    const existingStr = formatDate(new Date(conflictDeadline.dueDate));
+    const newStr = formatDate(item.resolvedDate);
+    const picker = document.createElement("div");
+    picker.className = "conf-conflict-pick";
+    picker.innerHTML = `
+      <span class="conf-conflict-label">Already saved:</span>
+      <label class="conf-conflict-opt">
+        <input type="radio" name="conf-conflict-${idx}" value="keep" />
+        Keep ${escapeHtml(existingStr)}
+      </label>
+      <label class="conf-conflict-opt">
+        <input type="radio" name="conf-conflict-${idx}" value="new" checked />
+        Use new ${escapeHtml(newStr)}
+      </label>
+    `;
+    row.querySelector(".confirm-row-fields")!.appendChild(picker);
+  }
 }
 
 /** Return from confirmation view to the main panel. */
@@ -378,6 +493,20 @@ async function saveConfirmedItems(): Promise<number> {
       "Task";
 
     if (original.resolvedDate) {
+      // Check if the user resolved a conflict (same unit+title already in storage)
+      const conflictId = row.dataset.conflictId;
+      if (conflictId) {
+        const keepRadio = row.querySelector<HTMLInputElement>(
+          `input[name^="conf-conflict-"][value="keep"]`,
+        );
+        if (keepRadio?.checked) continue; // user chose to keep existing — skip
+
+        // "use new" — overwrite the existing deadline's date, no duplicate created
+        await setDeadlineDate(conflictId, original.resolvedDate.toISOString());
+        saved++;
+        continue;
+      }
+
       // Parser already resolved the date — save a single deadline directly
       const deadline: Deadline = {
         id: crypto.randomUUID(),
@@ -453,7 +582,12 @@ async function saveConfirmedItems(): Promise<number> {
           title,
           unit,
           unitName: original.unitName,
-          dueDate: weekToDate(sem, yr, week, 0).toISOString(),
+          dueDate: weekToDate(
+            sem,
+            yr,
+            week,
+            parseInt(row.dataset.dayOffset ?? "0", 10),
+          ).toISOString(),
           // Each entry gets its own "Week N" label so they're distinguishable in the list
           weekLabel: `Week ${week}`,
           weight: original.weight,
@@ -597,6 +731,119 @@ function showFormError(msg: string): void {
 }
 
 /**
+ * Match an assessment's title + weekLabel to a session type keyword.
+ * Returns the first keyword found, or null if none match.
+ */
+function detectAssessmentSessionType(
+  title: string,
+  weekLabel: string,
+): string | null {
+  const text = (title + " " + weekLabel).toLowerCase();
+  const SESSION_TYPES = [
+    "lab",
+    "laboratory",
+    "tutorial",
+    "workshop",
+    "lecture",
+    "practical",
+    "seminar",
+  ];
+  return SESSION_TYPES.find((k) => text.includes(k)) ?? null;
+}
+
+/**
+ * Look up the day-of-week offset for an assessment based on timetable session data.
+ * Returns 0 (Monday) if no matching session is found.
+ */
+function resolveSessionDayOffset(
+  unit: string,
+  title: string,
+  weekLabel: string,
+): number {
+  const type = detectAssessmentSessionType(title, weekLabel);
+  if (!type) return 0;
+  // "laboratory" and "lab" both match — normalise to "lab" for lookup
+  const normType = type === "laboratory" ? "lab" : type;
+  const session = timetableSessions.find(
+    (s) => s.unit === unit && (s.type === normType || s.type === type),
+  );
+  return session?.dayOfWeek ?? 0;
+}
+
+/**
+ * Sync the TBA row's visual state to match the current week input value.
+ * When weeks are present: hide "fill in ↓" badge, show a preview date (Monday
+ * of the first week). When empty: restore the badge, hide the preview.
+ */
+function syncTbaRow(row: HTMLElement): void {
+  const badge = row.querySelector<HTMLElement>(".conf-tba-badge");
+  const preview = row.querySelector<HTMLElement>(".conf-tba-preview");
+  const weekInp = row.querySelector<HTMLInputElement>(".conf-week-inp");
+  const semSel = row.querySelector<HTMLSelectElement>(".conf-sem-sel");
+  const yearInp = row.querySelector<HTMLInputElement>(".conf-year-inp");
+  if (!badge || !preview || !weekInp) return;
+
+  const weeks = parseWeekInput(weekInp.value.trim());
+  const filled = weeks.length > 0;
+  row.classList.toggle("tba", !filled);
+  badge.classList.toggle("hidden", filled);
+
+  if (!filled) {
+    preview.classList.add("hidden");
+    return;
+  }
+
+  const sem = parseInt(semSel?.value ?? "1", 10) as 1 | 2;
+  const year = parseInt(yearInp?.value ?? String(defaultYear()), 10);
+  const dayOffset = parseInt(row.dataset.dayOffset ?? "0", 10);
+  try {
+    const date = weekToDate(sem, year, weeks[0], dayOffset);
+    preview.textContent = `→ ${formatDate(date)}`;
+    preview.classList.remove("hidden");
+  } catch {
+    // Intentional: hide the date preview when the week input cannot be parsed.
+    preview.classList.add("hidden");
+  }
+}
+
+/**
+ * Return a suggested week-input string for recurring weekLabel patterns.
+ * Returns an empty string when the label doesn't match a known recurrence.
+ *
+ * Weekly       → every teaching week (1–maxWeek)
+ * Fortnightly  → even weeks starting week 2, capped at maxWeek
+ * Monthly      → every 4 weeks, capped at maxWeek
+ *
+ * @param maxWeek  Last teaching week (total semester weeks minus study + exam weeks)
+ */
+function recurringWeekHint(label: string, maxWeek: number): string {
+  const l = label.toLowerCase();
+  if (/\bweekly\b|\beach\s+week\b/.test(l)) {
+    return Array.from({ length: maxWeek }, (_, i) => i + 1).join(",");
+  }
+  if (
+    /\bfortnightly\b|\bfortnight\b|\bbi-?weekly\b|\bevery\s+2\s+weeks?\b|\balternate\s+weeks?\b/.test(
+      l,
+    )
+  ) {
+    // If the label names a starting week (e.g. "Fortnightly (Week 1)"), use that
+    const startMatch = l.match(/\bweek\s+(\d{1,2})\b/);
+    const start = startMatch ? parseInt(startMatch[1], 10) : 2; // default: week 2
+    const weeks: number[] = [];
+    for (let w = start; w <= maxWeek; w += 2) weeks.push(w);
+    return weeks.join(",");
+  }
+  if (/\bmonthly\b|\bevery\s+(month|4\s+weeks?)\b/.test(l)) {
+    const startMatch = l.match(/\bweek\s+(\d{1,2})\b/);
+    const start = startMatch ? parseInt(startMatch[1], 10) : 1;
+    const weeks: number[] = [];
+    for (let w = start; w <= maxWeek; w += 4) weeks.push(w);
+    return weeks.join(",");
+  }
+  return "";
+}
+
+/**
  * Update the live week preview text whenever the week/semester/year fields change.
  * Shows the resolved Monday date so the user can verify before adding.
  */
@@ -723,17 +970,23 @@ async function init(): Promise<void> {
   // Apply the stored default semester to all dropdowns after first render
   applyDefaultSemester(settings.defaultSemester);
 
+  // Load timetable session data (day-of-week per unit/type) for confirmation screen
+  timetableSessions = await loadTimetableSessions();
+
   // ── Settings panel ────────────────────────────────────────────────────────
   await wireSettingsSection({ renderDeadlines, overduePositionRef });
 
   // ── ICS import section ────────────────────────────────────────────────────
-  wireIcsSection({ showConfirmation, renderDeadlines });
+  const { handleIcsFile } = wireIcsSection({
+    showConfirmation,
+    renderDeadlines,
+  });
 
   // ── Outline API fetch section ─────────────────────────────────────────────
   wireApiSection();
 
   // ── Drop zone ────────────────────────────────────────────────────────────
-  wirePDFDropZone({ showConfirmation });
+  wirePDFDropZone({ showConfirmation, handleIcsFile });
 
   // ── Confirmation section buttons ─────────────────────────────────────────
   document
