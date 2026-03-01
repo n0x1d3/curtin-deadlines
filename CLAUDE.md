@@ -1,9 +1,6 @@
 # CLAUDE.md — Curtin Deadlines Chrome Extension
 
-Inherits from root `@/CLAUDE.md`. Only project-specific overrides are listed here.
-
-## Code Style
-- ESLint configured in `.eslintrc.json` (`@typescript-eslint/recommended` + Prettier) — not Airbnb (project-level override).
+Inherits all standards from `/Users/n0xde/Files/CLAUDE.md`. Only overrides and project-specific additions below.
 
 ## Commands
 
@@ -13,17 +10,32 @@ bun run watch     # dev build with file-watch (reload extension after each build
 bun run format    # run prettier on src/, config/, public/
 bun run lint      # run ESLint on src/**/*.ts
 bun run lint:fix  # run ESLint with --fix (auto-corrects formatting)
-bun test          # run vitest test suite (jsdom env)
+bun run test      # run vitest test suite (jsdom env)
 bun run test:watch
 ```
 
 Test files live in `src/**/__tests__/`.
 
-## Architecture
+## Stack
+- Chrome Manifest V3, TypeScript, Webpack 5, vitest (jsdom), pdf.js
+
+## Overrides
+- ESLint: `.eslintrc.json` uses `@typescript-eslint/recommended` + Prettier — not Airbnb.
+
+## Project-Specific Rules
+
+### Codex Workflow
+- `AGENTS.md` — Codex's project context (commands, architecture, known issues)
+- `SPEC.md` — requirements doc; Claude writes, Codex reviews
+- `PLAN.md` — implementation plan; Claude writes, Codex reviews
+- Trigger Codex handoff: say "implement it with codex" in a Claude Code session
+- Never start implementation if `PLAN.md` is stale or missing
+
+### Architecture
 
 Chrome Manifest V3 extension. TypeScript + Webpack 5. All source in `src/`, compiled output in `build/`.
 
-### Entry Points
+#### Entry Points
 
 | File | Purpose |
 |------|---------|
@@ -32,7 +44,7 @@ Chrome Manifest V3 extension. TypeScript + Webpack 5. All source in `src/`, comp
 | `src/contentScript.ts` | Injected into Blackboard; scrapes deadline data |
 | `src/background.ts` | Service worker; handles `chrome.downloads` for ICS export |
 
-### Module Layout
+#### Module Layout
 
 ```
 src/
@@ -72,7 +84,7 @@ src/
     parseProgramCalendar.ts — Program Calendar section parsing
 ```
 
-### Dependency Rules
+#### Dependency Rules
 
 - `domain/` and `utils/` — zero Chrome API usage; pure TypeScript. Safe to unit-test.
 - `storage/` — Chrome storage only; no DOM access.
@@ -80,7 +92,7 @@ src/
 - `ui/` — DOM only; callbacks passed in via deps interfaces to avoid circular imports.
 - `sidePanel.ts` — DOM + Chrome APIs freely; imports from all other modules.
 
-### Data Flow
+#### Data Flow
 
 **PDF path:**
 ```
@@ -100,7 +112,7 @@ showConfirmation → saveConfirmedItems → addDeadline
                      → matchIcsToDeadlines + matchIcsByWeekAndSession → showIcsSection → setDeadlineDate
 ```
 
-## Key Design Decisions
+### Key Design Decisions
 
 - **`isFinalExamType`** lives in `domain/deadlines.ts` (deadline classification, not ICS logic).
 - **`buildDeadlineSections`** is a pure function — takes `{ filterUnit, filterStatus, sortBy, overduePosition }` as explicit opts so it's testable without DOM.
