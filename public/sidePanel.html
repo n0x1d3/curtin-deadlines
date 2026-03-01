@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -9,7 +9,6 @@
   </head>
   <body>
     <div class="app">
-
       <!-- ── Header ─────────────────────────────────────────────────── -->
       <header class="header">
         <div class="header-row">
@@ -20,9 +19,22 @@
           </div>
           <div class="header-actions">
             <!-- Export deadlines to an ICS calendar file -->
-            <button id="export-btn" class="icon-btn" title="Export to .ics calendar">
+            <button
+              id="export-btn"
+              class="icon-btn"
+              title="Export to .ics calendar"
+            >
               <!-- Calendar download icon (inline SVG) -->
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="16" y1="2" x2="16" y2="6"></line>
                 <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -32,13 +44,26 @@
               </svg>
             </button>
             <!-- Toggle light / dark mode -->
-            <button id="theme-toggle" class="icon-btn" title="Toggle dark mode">🌙</button>
+            <button id="theme-toggle" class="icon-btn" title="Toggle dark mode">
+              🌙
+            </button>
             <!-- Open settings panel -->
             <button id="settings-btn" class="icon-btn" title="Settings">
               <!-- Gear / cog icon (inline SVG) -->
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                ></path>
               </svg>
             </button>
           </div>
@@ -48,7 +73,6 @@
 
       <!-- ── Main section (PDF drop + manual form + deadline list) ──── -->
       <main id="main-section">
-
         <!-- ── Outline API fetch section ─────────────────────────────────── -->
         <!-- Lets the user skip PDF upload by fetching outline data directly
              from the publicly accessible OutSystems API -->
@@ -66,23 +90,50 @@
               <option value="1">Semester 1</option>
               <option value="2">Semester 2</option>
             </select>
-            <input id="api-year" type="number" value="2026" min="2024" max="2030" />
+            <input
+              id="api-year"
+              type="number"
+              value="2026"
+              min="2024"
+              max="2030"
+            />
             <button id="api-fetch-btn">Fetch outline</button>
           </div>
           <!-- Status / error message shown during and after fetch -->
           <p id="api-status"></p>
         </div>
 
-      <!-- PDF upload / drag-drop zone -->
-        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Drop unit outline PDF or timetable here">
+        <!-- PDF upload / drag-drop zone -->
+        <div
+          id="drop-zone"
+          class="drop-zone"
+          role="button"
+          tabindex="0"
+          aria-label="Drop unit outline PDF or timetable here"
+        >
           <div class="drop-zone-inner">
             <span class="drop-icon">📄</span>
-            <span class="drop-primary">Drop unit outline PDF or timetable here</span>
-            <span class="drop-sub">or click to browse · PDF or .ics · up to 4 PDFs</span>
+            <span class="drop-primary"
+              >Drop unit outline PDF or timetable here</span
+            >
+            <span class="drop-sub">or click to browse · PDF or .ics</span>
+            <!-- Shown when PDFs are staged; hidden when queue is empty -->
+            <span id="queue-badge" class="queue-badge hidden"></span>
           </div>
           <!-- Hidden file input — accepts PDF and .ics (.ics routed to ICS handler in JS) -->
-          <input type="file" id="file-input" accept=".pdf,.ics" multiple hidden />
+          <input
+            type="file"
+            id="file-input"
+            accept=".pdf,.ics"
+            multiple
+            hidden
+          />
         </div>
+
+        <!-- Scan button — appears below the drop zone when PDFs are staged -->
+        <button id="file-queue-scan" class="button hidden">
+          Scan <span id="file-queue-count"></span>
+        </button>
 
         <!-- Parsing progress (hidden until PDF is loading) -->
         <div id="parse-progress" class="parse-progress hidden">
@@ -96,16 +147,24 @@
             <span>+ Add deadline manually</span>
           </summary>
           <form id="manual-form" class="manual-form" autocomplete="off">
-
             <!-- Unit code + task name (always visible) -->
             <div class="form-row">
               <div class="form-field">
                 <label for="f-unit">Unit code</label>
-                <input type="text" id="f-unit" placeholder="e.g. COMP1005" maxlength="8" />
+                <input
+                  type="text"
+                  id="f-unit"
+                  placeholder="e.g. COMP1005"
+                  maxlength="8"
+                />
               </div>
-              <div class="form-field" style="flex:2">
+              <div class="form-field" style="flex: 2">
                 <label for="f-title">Task name</label>
-                <input type="text" id="f-title" placeholder="e.g. Assignment 1" />
+                <input
+                  type="text"
+                  id="f-title"
+                  placeholder="e.g. Assignment 1"
+                />
               </div>
             </div>
 
@@ -133,11 +192,22 @@
                 </div>
                 <div class="form-field">
                   <label for="f-year">Year</label>
-                  <input type="number" id="f-year" min="2024" max="2030" value="2026" />
+                  <input
+                    type="number"
+                    id="f-year"
+                    min="2024"
+                    max="2030"
+                    value="2026"
+                  />
                 </div>
                 <div class="form-field">
                   <label for="f-week">Week</label>
-                  <input type="text" id="f-week" placeholder="e.g. 5 or 5-7" maxlength="5" />
+                  <input
+                    type="text"
+                    id="f-week"
+                    placeholder="e.g. 5 or 5-7"
+                    maxlength="5"
+                  />
                 </div>
               </div>
               <!-- Show computed date preview (updated live) -->
@@ -147,7 +217,7 @@
             <!-- ── Exact date mode fields ────────────────────────── -->
             <div id="date-fields" class="mode-fields hidden">
               <div class="form-row">
-                <div class="form-field" style="flex:2">
+                <div class="form-field" style="flex: 2">
                   <label for="f-date">Date</label>
                   <input type="date" id="f-date" />
                 </div>
@@ -166,22 +236,37 @@
 
         <!-- ── Deadline list ─────────────────────────────────────── -->
         <section id="deadline-list-section">
-
           <!-- Filter + sort bar — hidden until at least one deadline exists -->
           <div id="filter-bar" class="filter-bar hidden">
             <!-- Unit code dropdown — options populated dynamically by JS -->
-            <select id="filter-unit" class="filter-unit-sel" title="Filter by unit">
+            <select
+              id="filter-unit"
+              class="filter-unit-sel"
+              title="Filter by unit"
+            >
               <option value="">All units</option>
             </select>
             <!-- Status filter pills -->
-            <div class="filter-pills" role="group" aria-label="Filter by status">
+            <div
+              class="filter-pills"
+              role="group"
+              aria-label="Filter by status"
+            >
               <button class="filter-pill active" data-status="all">All</button>
-              <button class="filter-pill" data-status="upcoming">Upcoming</button>
+              <button class="filter-pill" data-status="upcoming">
+                Upcoming
+              </button>
               <button class="filter-pill" data-status="tba">TBA</button>
               <button class="filter-pill" data-status="overdue">Overdue</button>
             </div>
             <!-- Sort toggle button — cycles Date ↕ / Unit ↕ -->
-            <button id="sort-btn" class="filter-sort-btn" title="Toggle sort order">Date ↕</button>
+            <button
+              id="sort-btn"
+              class="filter-sort-btn"
+              title="Toggle sort order"
+            >
+              Date ↕
+            </button>
           </div>
 
           <div id="deadline-list">
@@ -197,10 +282,11 @@
           <div id="empty-state" class="empty-state hidden">
             <span class="empty-icon">✅</span>
             <p>No deadlines yet.</p>
-            <p class="empty-sub">Drop a unit outline PDF above, or add one manually.</p>
+            <p class="empty-sub">
+              Drop a unit outline PDF above, or add one manually.
+            </p>
           </div>
         </section>
-
       </main>
 
       <!-- ── Confirmation section (PDF review, hidden by default) ──── -->
@@ -221,7 +307,8 @@
         <div id="confirm-empty" class="confirm-empty hidden">
           <p>Couldn't extract any deadlines from this PDF.</p>
           <p class="confirm-empty-sub">
-            The PDF may not contain a text layer (scanned image) or uses a different format.<br />
+            The PDF may not contain a text layer (scanned image) or uses a
+            different format.<br />
             Please add deadlines manually using the form above.
           </p>
         </div>
@@ -250,8 +337,19 @@
           <div class="form-field">
             Overdue items position
             <div class="radio-row">
-              <label><input type="radio" name="overdue-pos" value="bottom" checked /> Bottom</label>
-              <label><input type="radio" name="overdue-pos" value="top" /> Top</label>
+              <label
+                ><input
+                  type="radio"
+                  name="overdue-pos"
+                  value="bottom"
+                  checked
+                />
+                Bottom</label
+              >
+              <label
+                ><input type="radio" name="overdue-pos" value="top" />
+                Top</label
+              >
             </div>
           </div>
         </div>
@@ -260,32 +358,59 @@
         <div class="settings-group">
           <h3 class="settings-heading">Data</h3>
           <div class="settings-row">
-            <button id="set-export-json" class="button button--secondary">Export JSON</button>
-            <button id="set-import-json-btn" class="button button--secondary">Import JSON</button>
+            <button id="set-export-json" class="button button--secondary">
+              Export JSON
+            </button>
+            <button id="set-import-json-btn" class="button button--secondary">
+              Import JSON
+            </button>
             <!-- Hidden file input triggered by Import JSON button -->
-            <input id="set-import-json-file" type="file" accept=".json" hidden />
+            <input
+              id="set-import-json-file"
+              type="file"
+              accept=".json"
+              hidden
+            />
           </div>
-          <button id="set-clear-all" class="button button--danger">Clear all deadlines</button>
+          <button id="set-clear-all" class="button button--danger">
+            Clear all deadlines
+          </button>
           <!-- Inline delete confirmation — revealed when Clear is clicked -->
           <p id="set-clear-confirm" class="hidden settings-danger-row">
             Delete all deadlines?
-            <button id="set-clear-yes" class="button button--danger button--sm">Delete</button>
-            <button id="set-clear-no" class="button button--secondary button--sm">Cancel</button>
+            <button id="set-clear-yes" class="button button--danger button--sm">
+              Delete
+            </button>
+            <button
+              id="set-clear-no"
+              class="button button--secondary button--sm"
+            >
+              Cancel
+            </button>
           </p>
         </div>
 
         <!-- Other group: reset the "Did you submit?" prompt -->
         <div class="settings-group">
           <h3 class="settings-heading">Other</h3>
-          <button id="set-reset-prompt" class="button button--secondary">Reset "Did you submit?" prompt</button>
-          <p id="set-reset-msg" class="settings-hint hidden">Prompt will show again next time.</p>
+          <button id="set-reset-prompt" class="button button--secondary">
+            Reset "Did you submit?" prompt
+          </button>
+          <p id="set-reset-msg" class="settings-hint hidden">
+            Prompt will show again next time.
+          </p>
         </div>
 
         <!-- Developer tools: open the test panel in a new tab -->
         <div class="settings-group">
           <h3 class="settings-heading">Developer</h3>
-          <button id="set-open-test-panel" class="button button--secondary">Open Test Panel</button>
-          <p class="settings-hint">Scan unit outlines, validate parser output, detect drift, and download reports.</p>
+          <button id="set-open-test-panel" class="button button--secondary">
+            Open Test Panel
+          </button>
+          <p class="settings-hint">
+            Scan unit outlines, validate parser output, detect drift, and
+            download reports.
+          </p>
         </div>
       </section>
 
@@ -303,7 +428,9 @@
           <p id="ics-units-heading" class="settings-heading"></p>
           <!-- One checkbox row per unit code, rendered by JS -->
           <div id="ics-units-list"></div>
-          <button id="ics-fetch-btn" class="button">Fetch deadlines for selected units</button>
+          <button id="ics-fetch-btn" class="button">
+            Fetch deadlines for selected units
+          </button>
         </div>
 
         <!-- Divider shown only when both sub-sections have content -->
@@ -316,13 +443,16 @@
           <p id="ics-hint" class="settings-heading"></p>
           <!-- One checkbox row per matched TBA deadline, rendered by JS -->
           <div id="ics-list"></div>
-          <button id="ics-apply" class="button">Apply selected exam dates</button>
+          <button id="ics-apply" class="button">
+            Apply selected exam dates
+          </button>
         </div>
       </section>
 
       <!-- Toast notification container — populated dynamically by toast.ts -->
       <div id="toast-container"></div>
-    </div><!-- /.app -->
+    </div>
+    <!-- /.app -->
 
     <!-- Main side panel script (compiled from sidePanel.ts) -->
     <script src="sidePanel.js"></script>

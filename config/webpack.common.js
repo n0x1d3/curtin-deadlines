@@ -1,10 +1,10 @@
-'use strict';
+"use strict";
 
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const path = require('path');
+const CopyWebpackPlugin = require("copy-webpack-plugin");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const path = require("path");
 
-const PATHS = require('./paths');
+const PATHS = require("./paths");
 
 // File types treated as static assets (excluded from stats output)
 const IMAGE_TYPES = /\.(png|jpe?g|gif|svg)$/i;
@@ -13,7 +13,7 @@ const common = {
   output: {
     // All compiled bundles and assets land in /build
     path: PATHS.build,
-    filename: '[name].js',
+    filename: "[name].js",
   },
   stats: {
     all: false,
@@ -27,22 +27,22 @@ const common = {
       // Compile TypeScript via ts-loader
       {
         test: /\.ts$/,
-        use: ['ts-loader'],
+        use: ["ts-loader"],
       },
       // Extract CSS into separate files so sidePanel.html can link them
       {
         test: /\.css$/,
-        use: [MiniCssExtractPlugin.loader, 'css-loader'],
+        use: [MiniCssExtractPlugin.loader, "css-loader"],
       },
       // Handle image assets (icons etc.)
       {
         test: IMAGE_TYPES,
         use: [
           {
-            loader: 'file-loader',
+            loader: "file-loader",
             options: {
-              outputPath: 'images',
-              name: '[name].[ext]',
+              outputPath: "images",
+              name: "[name].[ext]",
             },
           },
         ],
@@ -50,36 +50,39 @@ const common = {
       // Handle font files referenced from @font-face in CSS
       {
         test: /\.(ttf|woff|woff2)$/,
-        type: 'asset/resource',
+        type: "asset/resource",
         generator: {
-          filename: 'fonts/[name][ext]',
+          filename: "fonts/[name][ext]",
         },
       },
     ],
   },
   resolve: {
     // Resolve .ts before .js so TypeScript source takes precedence
-    extensions: ['.ts', '.js'],
+    extensions: [".ts", ".js"],
   },
   plugins: [
     // Copy everything in public/ to build/ (manifest, HTML, icons)
     new CopyWebpackPlugin({
       patterns: [
         {
-          from: '**/*',
-          context: 'public',
+          from: "**/*",
+          context: "public",
         },
         // Copy the PDF.js worker so the side panel can reference it via
         // chrome.runtime.getURL('pdf.worker.min.js')
         {
-          from: path.resolve(__dirname, '../node_modules/pdfjs-dist/build/pdf.worker.min.js'),
-          to: 'pdf.worker.min.js',
+          from: path.resolve(
+            __dirname,
+            "../node_modules/pdfjs-dist/build/pdf.worker.min.js",
+          ),
+          to: "pdf.worker.min.js",
         },
       ],
     }),
     // Extract CSS into [name].css (e.g. sidePanel.css)
     new MiniCssExtractPlugin({
-      filename: '[name].css',
+      filename: "[name].css",
     }),
   ],
 };
