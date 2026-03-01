@@ -15,9 +15,7 @@
     "default_title": "Curtin Deadlines"
   },
   "permissions": ["storage", "sidePanel", "downloads", "tabs"],
-  "host_permissions": [
-    "https://curtin.outsystems.app/"
-  ],
+  "host_permissions": ["https://curtin.outsystems.app/"],
   "side_panel": {
     "default_path": "sidePanel.html"
   },

@@ -2,11 +2,12 @@
 // Converts stored deadlines to a .ics file and triggers a download via the
 // background service worker (which has access to the chrome.downloads API).
 
-import { createEvents, EventAttributes } from 'ics';
+import type { EventAttributes } from "ics";
+import { createEvents } from "ics";
 
-import { command } from '../types';
-import { loadDeadlines } from '../storage';
-import { defaultYear } from '../utils/format';
+import { command } from "../types";
+import { loadDeadlines } from "../storage";
+import { defaultYear } from "../utils/format";
 
 /**
  * Convert all stored deadlines to ICS EventAttributes and download the file.
@@ -24,18 +25,18 @@ export async function exportICS(): Promise<void> {
   if (deadlines.length === 0) return;
 
   const events: EventAttributes[] = deadlines.map((d) => {
-    const due     = new Date(d.dueDate);
+    const due = new Date(d.dueDate);
     const hasTime = due.getHours() !== 0 || due.getMinutes() !== 0;
 
     // Build VALARM alarms — always include 3-day and 1-day reminders
-    const alarms: EventAttributes['alarms'] = [
+    const alarms: EventAttributes["alarms"] = [
       {
-        action: 'display',
+        action: "display",
         description: `${d.unit} — ${d.title} due in 3 days`,
         trigger: { before: true, days: 3 },
       },
       {
-        action: 'display',
+        action: "display",
         description: `${d.unit} — ${d.title} due tomorrow`,
         trigger: { before: true, days: 1 },
       },
@@ -44,7 +45,7 @@ export async function exportICS(): Promise<void> {
     // Add 1-hour reminder only for timed events (not all-day)
     if (hasTime) {
       alarms.push({
-        action: 'display',
+        action: "display",
         description: `${d.unit} — ${d.title} due in 1 hour`,
         trigger: { before: true, hours: 1 },
       });
@@ -61,13 +62,13 @@ export async function exportICS(): Promise<void> {
           due.getHours(),
           due.getMinutes(),
         ],
-        startOutputType: 'local',
+        startOutputType: "local",
         duration: { hours: 1 },
         description: d.weekLabel
           ? `${d.weekLabel}\n${d.unit} — ${d.title}`
           : `${d.unit} — ${d.title}`,
-        status: 'CONFIRMED',
-        busyStatus: 'BUSY',
+        status: "CONFIRMED",
+        busyStatus: "BUSY",
         alarms,
       };
       return event;
@@ -80,8 +81,8 @@ export async function exportICS(): Promise<void> {
         description: d.weekLabel
           ? `${d.weekLabel}\n${d.unit} — ${d.title}`
           : `${d.unit} — ${d.title}`,
-        status: 'CONFIRMED',
-        busyStatus: 'FREE',
+        status: "CONFIRMED",
+        busyStatus: "FREE",
         alarms,
       };
       return event;
@@ -91,12 +92,12 @@ export async function exportICS(): Promise<void> {
   const { error, value } = createEvents(events);
 
   if (error || !value) {
-    console.error('ICS generation error:', error);
+    console.error("ICS generation error:", error);
     return;
   }
 
   // Build a meaningful filename using the current year
-  const year     = defaultYear();
+  const year = defaultYear();
   const filename = `Curtin Deadlines ${year}.ics`;
 
   // Ask the background service worker to trigger the download

@@ -1,22 +1,22 @@
-'use strict';
+"use strict";
 
-const { merge } = require('webpack-merge');
+const { merge } = require("webpack-merge");
 
-const common = require('./webpack.common.js');
-const PATHS = require('./paths');
+const common = require("./webpack.common.js");
+const PATHS = require("./paths");
 
 // Merge the common config with entry points for this extension.
 // Four entry points: side panel UI, test panel, Blackboard content script, service worker.
 const config = (env, argv) =>
   merge(common, {
     entry: {
-      sidePanel: PATHS.src + '/sidePanel.ts',
-      testPage: PATHS.src + '/testPage.ts',
-      contentScript: PATHS.src + '/contentScript.ts',
-      background: PATHS.src + '/background.ts',
+      sidePanel: PATHS.src + "/sidePanel.ts",
+      testPage: PATHS.src + "/testPage.ts",
+      contentScript: PATHS.src + "/contentScript.ts",
+      background: PATHS.src + "/background.ts",
     },
     // Source maps in development only — not needed in production builds
-    devtool: argv.mode === 'production' ? false : 'source-map',
+    devtool: argv.mode === "production" ? false : "source-map",
   });
 
 module.exports = config;

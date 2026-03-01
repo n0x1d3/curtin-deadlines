@@ -2,7 +2,7 @@
 // All chrome.storage.local interactions are consolidated here.
 // No rendering or DOM access — callers are responsible for re-rendering.
 
-import type { Deadline, AppSettings } from '../types';
+import type { Deadline, AppSettings } from "../types";
 
 // ── Deadline storage ──────────────────────────────────────────────────────────
 
@@ -16,23 +16,25 @@ import type { Deadline, AppSettings } from '../types';
  */
 export async function loadDeadlines(): Promise<Deadline[]> {
   // Primary source: chrome.storage.local
-  const local = await chrome.storage.local.get('deadlines');
+  const local = await chrome.storage.local.get("deadlines");
   if (local.deadlines) {
     return local.deadlines as Deadline[];
   }
 
   // Migration: check if old data lives in sync storage
   try {
-    const sync = await chrome.storage.sync.get('deadlines');
+    const sync = await chrome.storage.sync.get("deadlines");
     if (sync.deadlines && (sync.deadlines as Deadline[]).length > 0) {
       const migrated = sync.deadlines as Deadline[];
       // Move to local, clear from sync
       await chrome.storage.local.set({ deadlines: migrated });
-      await chrome.storage.sync.remove('deadlines');
+      await chrome.storage.sync.remove("deadlines");
       return migrated;
     }
-  } catch {
-    // Sync unavailable or quota already exceeded — ignore
+  } catch (err) {
+    // Sync unavailable or quota exceeded — migration is best-effort so we
+    // continue with an empty list rather than crashing the extension.
+    console.error("[storage] sync→local migration failed:", err);
   }
 
   return [];
@@ -61,7 +63,10 @@ export async function deleteDeadline(id: string): Promise<void> {
  * Update the due date of an existing deadline and clear its dateTBA flag.
  * Re-sorts the list after updating so the card moves to its correct position.
  */
-export async function setDeadlineDate(id: string, dueDate: string): Promise<void> {
+export async function setDeadlineDate(
+  id: string,
+  dueDate: string,
+): Promise<void> {
   const deadlines = await loadDeadlines();
   const idx = deadlines.findIndex((d) => d.id === id);
   if (idx === -1) return;
@@ -79,7 +84,7 @@ export async function setDeadlineDate(id: string, dueDate: string): Promise<void
  * Stored in chrome.storage.local so it persists across sessions.
  */
 export async function loadSkipSubmitConfirm(): Promise<boolean> {
-  const result = await chrome.storage.local.get('skipSubmitConfirm');
+  const result = await chrome.storage.local.get("skipSubmitConfirm");
   return result.skipSubmitConfirm === true;
 }
 
@@ -92,16 +97,18 @@ export async function saveSkipSubmitConfirm(skip: boolean): Promise<void> {
 
 /** Load app settings from chrome.storage.local (returns defaults if not set). */
 export async function loadSettings(): Promise<AppSettings> {
-  const result = await chrome.storage.local.get('appSettings');
+  const result = await chrome.storage.local.get("appSettings");
   const saved = result.appSettings ?? {};
   return {
     defaultSemester: (saved.defaultSemester as 1 | 2) ?? 1,
-    overduePosition: (saved.overduePosition as 'top' | 'bottom') ?? 'bottom',
+    overduePosition: (saved.overduePosition as "top" | "bottom") ?? "bottom",
   };
 }
 
 /** Persist app settings to chrome.storage.local. */
-export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
+export async function saveSettings(
+  settings: Partial<AppSettings>,
+): Promise<void> {
   const current = await loadSettings();
   await chrome.storage.local.set({ appSettings: { ...current, ...settings } });
 }

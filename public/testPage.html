@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -6,7 +6,13 @@
     <title>Curtin Deadlines — Test Panel</title>
     <style>
       /* ── Base ──────────────────────────────────────────────────────────── */
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
       :root {
         --bg: #f5f5f7;
@@ -19,7 +25,7 @@
         --warn: #ff9f0a;
         --error: #ff3b30;
         --info: #636366;
-        --mono: 'SF Mono', ui-monospace, monospace;
+        --mono: "SF Mono", ui-monospace, monospace;
       }
 
       body.dark {
@@ -31,7 +37,7 @@
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         font-size: 13px;
         background: var(--bg);
         color: var(--text);
@@ -40,23 +46,43 @@
       }
 
       /* ── Header ─────────────────────────────────────────────────────────── */
+      /* Outer header owns background/border/sticky; inner wrapper aligns to page max-width */
       .tp-header {
         background: var(--surface);
         border-bottom: 1px solid var(--border);
         padding: 14px 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
         position: sticky;
         top: 0;
         z-index: 10;
       }
-      .tp-header h1 { font-size: 15px; font-weight: 600; }
-      .tp-header .tp-header-right { display: flex; gap: 8px; align-items: center; }
-      .tp-header .muted { font-size: 11px; color: var(--muted); }
+      .tp-header-inner {
+        max-width: 1400px;
+        margin: 0 auto;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .tp-header h1 {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .tp-header .tp-header-right {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .tp-header .muted {
+        font-size: 11px;
+        color: var(--muted);
+      }
 
       /* ── Layout ──────────────────────────────────────────────────────────── */
-      .tp-body { max-width: 960px; margin: 0 auto; padding: 20px 20px 0; }
+      .tp-body {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px 20px 0;
+      }
       .tp-section {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -73,11 +99,28 @@
         cursor: pointer;
         user-select: none;
       }
-      .tp-section-header h2 { font-size: 13px; font-weight: 600; }
-      .tp-section-header .chevron { font-size: 10px; color: var(--muted); transition: transform .2s; }
-      .tp-section-header.collapsed .chevron { transform: rotate(-90deg); }
-      .tp-section-body { padding: 16px; }
-      .tp-section-body.hidden { display: none; }
+      .tp-section-header h2 {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .tp-section-header .chevron {
+        font-size: 10px;
+        color: var(--muted);
+        transition: transform 0.2s;
+      }
+      .tp-section-header.collapsed .chevron {
+        transform: rotate(-90deg);
+      }
+      .tp-section-body {
+        padding: 16px;
+      }
+      .tp-section-body.hidden {
+        display: none;
+      }
+      /* General utility class — used by grab-progress-wrap and other toggled elements */
+      .hidden {
+        display: none;
+      }
 
       /* ── Controls row ─────────────────────────────────────────────────── */
       .tp-controls {
@@ -87,9 +130,19 @@
         align-items: flex-end;
         margin-bottom: 14px;
       }
-      .tp-field { display: flex; flex-direction: column; gap: 4px; }
-      .tp-field label { font-size: 11px; color: var(--muted); font-weight: 500; }
-      input[type=text], select {
+      .tp-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .tp-field label {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      input[type="text"],
+      input[type="number"],
+      select {
         padding: 6px 10px;
         border: 1px solid var(--border);
         border-radius: 6px;
@@ -98,8 +151,34 @@
         font-size: 13px;
         outline: none;
       }
-      input[type=text]:focus, select:focus { border-color: var(--accent); }
-      input[type=text] { width: 130px; }
+      input[type="text"]:focus,
+      input[type="number"]:focus,
+      select:focus {
+        border-color: var(--accent);
+      }
+      input[type="text"] {
+        width: 130px;
+      }
+      /* Year inputs are narrower than the default text input width */
+      .year-input {
+        width: 70px;
+      }
+      /* Concurrency input only needs room for 3 digits */
+      .concurrency-input {
+        width: 55px;
+      }
+      /* Fieldset used for checkbox groups (Years / Semesters) — reset browser decoration */
+      fieldset.tp-field {
+        border: none;
+        padding: 0;
+        margin: 0;
+      }
+      fieldset.tp-field legend {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
 
       /* ── Buttons ─────────────────────────────────────────────────────── */
       .btn {
@@ -111,22 +190,48 @@
         cursor: pointer;
         white-space: nowrap;
       }
-      .btn-primary { background: var(--accent); color: #fff; }
-      .btn-primary:hover { opacity: .9; }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
       .btn-secondary {
         background: var(--bg);
         color: var(--text);
         border: 1px solid var(--border);
       }
-      .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
-      .btn-sm { padding: 4px 10px; font-size: 11px; }
-      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn-secondary:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-sm {
+        padding: 4px 10px;
+        font-size: 11px;
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
 
       /* ── Status / tag indicators ──────────────────────────────────────── */
-      .status-ok   { color: var(--ok); }
-      .status-warn { color: var(--warn); }
-      .status-err  { color: var(--error); }
-      .status-info { color: var(--info); }
+      .status-ok {
+        color: var(--ok);
+      }
+      .status-warn {
+        color: var(--warn);
+      }
+      .status-err {
+        color: var(--error);
+      }
+      .status-info {
+        color: var(--info);
+      }
 
       .tag {
         display: inline-block;
@@ -134,59 +239,118 @@
         border-radius: 4px;
         font-size: 10px;
         font-weight: 600;
-        letter-spacing: .3px;
+        letter-spacing: 0.3px;
         text-transform: uppercase;
       }
-      .tag-ok   { background: #d1f5db; color: #1a7a3a; }
-      .tag-warn { background: #fff3cc; color: #8a5c00; }
-      .tag-err  { background: #ffdad8; color: #a00; }
-      .tag-info { background: #e5e5ea; color: #555; }
-      body.dark .tag-ok   { background: #1a3d22; color: #5dd879; }
-      body.dark .tag-warn { background: #3d2f00; color: #ffd060; }
-      body.dark .tag-err  { background: #3d1010; color: #ff7070; }
-      body.dark .tag-info { background: #3a3a3c; color: #aaa; }
+      .tag-ok {
+        background: #d1f5db;
+        color: #1a7a3a;
+      }
+      .tag-warn {
+        background: #fff3cc;
+        color: #8a5c00;
+      }
+      .tag-err {
+        background: #ffdad8;
+        color: #a00;
+      }
+      .tag-info {
+        background: #e5e5ea;
+        color: #555;
+      }
+      body.dark .tag-ok {
+        background: #1a3d22;
+        color: #5dd879;
+      }
+      body.dark .tag-warn {
+        background: #3d2f00;
+        color: #ffd060;
+      }
+      body.dark .tag-err {
+        background: #3d1010;
+        color: #ff7070;
+      }
+      body.dark .tag-info {
+        background: #3a3a3c;
+        color: #aaa;
+      }
 
       /* ── Scan table ───────────────────────────────────────────────────── */
-      .scan-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .scan-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
       .scan-table th {
         text-align: left;
         padding: 6px 10px;
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: .4px;
+        letter-spacing: 0.4px;
         color: var(--muted);
         border-bottom: 1px solid var(--border);
       }
-      .scan-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-      .scan-row { cursor: pointer; }
-      .scan-row:hover td { background: var(--bg); }
-      .scan-detail-row td { padding: 0; }
+      .scan-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      .scan-row {
+        cursor: pointer;
+      }
+      .scan-row:hover td {
+        background: var(--bg);
+      }
+      .scan-detail-row td {
+        padding: 0;
+      }
       .scan-detail-inner {
         padding: 12px 16px;
         background: var(--bg);
         border-bottom: 1px solid var(--border);
+        /* Wide diagnostic tables / raw text can exceed the section width — scroll rather than clip */
+        overflow-x: auto;
       }
-      .scan-row-unit { font-weight: 600; font-family: var(--mono); }
-      .retest-btn { font-size: 10px; margin-left: 6px; vertical-align: middle; }
+      .scan-row-unit {
+        font-weight: 600;
+        font-family: var(--mono);
+      }
+      .retest-btn {
+        font-size: 10px;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
 
       /* ── Detail table ─────────────────────────────────────────────────── */
-      .detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
       .detail-table th {
         text-align: left;
         padding: 5px 8px;
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: .4px;
+        letter-spacing: 0.4px;
         color: var(--muted);
         border-bottom: 1px solid var(--border);
       }
-      .detail-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
-      .detail-table tr:last-child td { border-bottom: none; }
+      .detail-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .detail-table tr:last-child td {
+        border-bottom: none;
+      }
 
       /* ── Issues list ──────────────────────────────────────────────────── */
-      .issues-list { list-style: none; margin-top: 10px; }
+      .issues-list {
+        list-style: none;
+        margin-top: 10px;
+      }
       .issues-list li {
         display: flex;
         gap: 8px;
@@ -195,34 +359,74 @@
         font-size: 12px;
         border-bottom: 1px solid var(--border);
       }
-      .issues-list li:last-child { border-bottom: none; }
-      .issue-item { color: var(--muted); flex: 1; }
+      .issues-list li:last-child {
+        border-bottom: none;
+      }
+      .issue-item {
+        color: var(--muted);
+        flex: 1;
+      }
 
       /* ── Diff table ───────────────────────────────────────────────────── */
-      .diff-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+      .diff-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 10px;
+      }
       .diff-table th {
         padding: 5px 8px;
         text-align: left;
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: .4px;
+        letter-spacing: 0.4px;
         color: var(--muted);
         border-bottom: 1px solid var(--border);
       }
-      .diff-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+      .diff-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--border);
+      }
 
       /* ── Drift section ────────────────────────────────────────────────── */
-      .drift-list { list-style: none; font-size: 12px; margin-top: 8px; }
-      .drift-list li { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); }
-      .drift-list li:last-child { border-bottom: none; }
-      .drift-sym { width: 16px; flex-shrink: 0; font-weight: 700; }
-      .drift-new  { color: var(--ok); }
-      .drift-gone { color: var(--error); }
-      .drift-chg  { color: var(--warn); }
+      .drift-list {
+        list-style: none;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .drift-list li {
+        display: flex;
+        gap: 8px;
+        padding: 4px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .drift-list li:last-child {
+        border-bottom: none;
+      }
+      .drift-sym {
+        width: 16px;
+        flex-shrink: 0;
+        font-weight: 700;
+      }
+      .drift-new {
+        color: var(--ok);
+      }
+      .drift-gone {
+        color: var(--error);
+      }
+      .drift-chg {
+        color: var(--warn);
+      }
 
       /* ── Raw text inspector ───────────────────────────────────────────── */
-      .raw-toggle { font-size: 11px; color: var(--accent); cursor: pointer; margin-top: 10px; display: inline-block; }
+      .raw-toggle {
+        font-size: 11px;
+        color: var(--accent);
+        cursor: pointer;
+        margin-top: 10px;
+        display: inline-block;
+      }
       .raw-box {
         margin-top: 8px;
         padding: 10px;
@@ -233,6 +437,7 @@
         font-size: 11px;
         white-space: pre-wrap;
         max-height: 280px;
+        overflow-x: auto;
         overflow-y: auto;
         color: var(--text);
       }
@@ -246,24 +451,36 @@
         color: var(--muted);
         font-size: 13px;
         cursor: pointer;
-        transition: border-color .15s;
+        transition: border-color 0.15s;
         margin-bottom: 14px;
       }
-      .pdf-drop:hover, .pdf-drop.drag-over { border-color: var(--accent); color: var(--accent); }
+      .pdf-drop:hover,
+      .pdf-drop.drag-over {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
 
       /* ── Regression table ─────────────────────────────────────────────── */
-      .regression-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+      .regression-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 10px;
+      }
       .regression-table th {
         padding: 5px 8px;
         text-align: left;
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: .4px;
+        letter-spacing: 0.4px;
         color: var(--muted);
         border-bottom: 1px solid var(--border);
       }
-      .regression-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+      .regression-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--border);
+      }
 
       /* ── Spinner ──────────────────────────────────────────────────────── */
       .spinner {
@@ -273,11 +490,15 @@
         border: 2px solid var(--border);
         border-top-color: var(--accent);
         border-radius: 50%;
-        animation: spin .7s linear infinite;
+        animation: spin 0.7s linear infinite;
         vertical-align: middle;
         margin-right: 4px;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
       /* ── Report bar ───────────────────────────────────────────────────── */
       .report-bar {
@@ -289,77 +510,174 @@
         border-top: 1px solid var(--border);
         border-radius: 0 0 10px 10px;
       }
-      .report-bar .copy-msg { font-size: 11px; color: var(--ok); }
+      .report-bar .copy-msg {
+        font-size: 11px;
+        color: var(--ok);
+      }
 
       /* ── Empty / status messages ──────────────────────────────────────── */
-      .tp-empty { color: var(--muted); font-size: 12px; padding: 12px 0; }
-      .tp-status { font-size: 12px; color: var(--muted); margin-bottom: 12px; min-height: 20px; }
+      .tp-empty {
+        color: var(--muted);
+        font-size: 12px;
+        padding: 12px 0;
+      }
+      /* Result containers are block-level, so their width is constrained by the section.
+         Wide scan tables / diagnostic tables inside scroll rather than overflowing the section. */
+      #scan-results,
+      #single-results,
+      #pdf-results,
+      #diff-results {
+        overflow-x: auto;
+      }
+      /* Dynamic status regions updated by JS — no min-height so idle sections stay compact */
+      .tp-status {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
+      /* Static description copy — same visual style, separate from live regions */
+      .tp-desc {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
 
       /* ── Grab All ──────────────────────────────────────────────────────── */
-      .check-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .check-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
       .check-group label {
-        display: flex; align-items: center; gap: 4px;
-        cursor: pointer; white-space: nowrap; font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        font-size: 13px;
       }
 
-      .grab-progress-wrap { margin-bottom: 12px; }
+      .grab-progress-wrap {
+        margin-bottom: 12px;
+      }
       .grab-progress-outer {
-        height: 8px; background: var(--border);
-        border-radius: 4px; overflow: hidden; margin-bottom: 8px;
+        height: 8px;
+        background: var(--border);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 8px;
       }
       .grab-progress-inner {
-        height: 100%; background: var(--accent);
-        border-radius: 4px; transition: width .3s ease;
+        height: 100%;
+        background: var(--accent);
+        border-radius: 4px;
+        transition: width 0.3s ease;
       }
       .grab-progress-stats {
-        display: flex; gap: 16px; font-size: 11px; color: var(--muted); flex-wrap: wrap;
+        display: flex;
+        gap: 16px;
+        font-size: 11px;
+        color: var(--muted);
+        flex-wrap: wrap;
       }
-      .grab-progress-stats strong { color: var(--text); }
+      .grab-progress-stats strong {
+        color: var(--text);
+      }
 
       /* Scrollable log of recent grab-all results */
       .grab-log {
-        max-height: 180px; overflow-y: auto;
-        font-family: var(--mono); font-size: 11px;
-        border: 1px solid var(--border); border-radius: 6px;
-        padding: 6px 10px; margin-top: 10px;
+        max-height: 180px;
+        overflow-y: auto;
+        font-family: var(--mono);
+        font-size: 11px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-top: 10px;
         display: none; /* shown via .visible */
       }
-      .grab-log.visible { display: block; }
-      .grab-log-line {
-        padding: 2px 0; border-bottom: 1px solid var(--border);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      .grab-log.visible {
+        display: block;
       }
-      .grab-log-line:last-child { border-bottom: none; }
-      .grab-log-ok   { color: var(--ok); }
-      .grab-log-err  { color: var(--error); }
-      .grab-log-skip { color: var(--muted); }
+      .grab-log-line {
+        padding: 2px 0;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .grab-log-line:last-child {
+        border-bottom: none;
+      }
+      .grab-log-ok {
+        color: var(--ok);
+      }
+      .grab-log-err {
+        color: var(--error);
+      }
+      .grab-log-skip {
+        color: var(--muted);
+      }
 
       /* ── Parser diagnostics ───────────────────────────────────────────── */
       /* Wrapper around all diagnostic sub-sections for one unit */
-      .diag-wrap { margin-top: 10px; }
+      .diag-wrap {
+        margin-top: 10px;
+      }
 
       /* One collapsible diagnostic sub-section (PC_TEXT structure, matching, etc.) */
-      .diag-section { margin-top: 10px; }
-      .diag-heading { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 6px; }
+      .diag-section {
+        margin-top: 10px;
+      }
+      .diag-heading {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        display: block;
+        margin-bottom: 6px;
+      }
 
       /* Bullet list used inside PC_TEXT structural analysis */
-      .diag-list { list-style: none; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
-      .diag-list li { display: flex; align-items: baseline; gap: 8px; }
+      .diag-list {
+        list-style: none;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .diag-list li {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
 
       /* AS_TASK ↔ PC_TEXT matching table */
-      .diag-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+      .diag-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 6px;
+      }
       .diag-table th {
         padding: 4px 8px;
         text-align: left;
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: .4px;
+        letter-spacing: 0.4px;
         color: var(--muted);
         border-bottom: 1px solid var(--border);
       }
-      .diag-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
-      .diag-table tr:last-child td { border-bottom: none; }
+      .diag-table td {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .diag-table tr:last-child td {
+        border-bottom: none;
+      }
 
       /* Column header badges in the PC_TEXT header list */
       .diag-col {
@@ -373,10 +691,26 @@
         color: var(--text);
       }
       /* Highlighted: Assessment column (green) and Begin Date column (blue) */
-      .diag-col-assmt { background: #d1f5db; border-color: #5dd879; color: #1a7a3a; }
-      .diag-col-date  { background: #ddeeff; border-color: #5599ff; color: #0044aa; }
-      body.dark .diag-col-assmt { background: #1a3d22; border-color: #2d7a40; color: #5dd879; }
-      body.dark .diag-col-date  { background: #0d2040; border-color: #2255bb; color: #7fb3ff; }
+      .diag-col-assmt {
+        background: #d1f5db;
+        border-color: #5dd879;
+        color: #1a7a3a;
+      }
+      .diag-col-date {
+        background: #ddeeff;
+        border-color: #5599ff;
+        color: #0044aa;
+      }
+      body.dark .diag-col-assmt {
+        background: #1a3d22;
+        border-color: #2d7a40;
+        color: #5dd879;
+      }
+      body.dark .diag-col-date {
+        background: #0d2040;
+        border-color: #2255bb;
+        color: #7fb3ff;
+      }
 
       /* Rendered PC_TEXT table (collapsible, Curtin HTML injected directly) */
       .diag-pctxt-rendered {
@@ -391,8 +725,12 @@
         font-size: 11px;
       }
       /* Make the injected Curtin HTML table reasonably readable */
-      .diag-pctxt-rendered table { border-collapse: collapse; font-size: 11px; }
-      .diag-pctxt-rendered td, .diag-pctxt-rendered th {
+      .diag-pctxt-rendered table {
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      .diag-pctxt-rendered td,
+      .diag-pctxt-rendered th {
         border: 1px solid var(--border);
         padding: 3px 6px;
         white-space: nowrap;
@@ -418,66 +756,123 @@
     </style>
   </head>
   <body>
-
     <!-- ── Header ────────────────────────────────────────────────────────── -->
     <header class="tp-header">
-      <h1>🔬 Curtin Deadlines — Test Panel</h1>
-      <div class="tp-header-right">
-        <span class="muted" id="header-status"></span>
-        <button class="btn btn-secondary btn-sm" id="theme-btn">Dark mode</button>
+      <div class="tp-header-inner">
+        <h1>🔬 Curtin Deadlines — Test Panel</h1>
+        <div class="tp-header-right">
+          <span class="muted" id="header-status" aria-live="polite"></span>
+          <button class="btn btn-secondary btn-sm" id="theme-btn">
+            Dark mode
+          </button>
+        </div>
       </div>
     </header>
 
     <div class="tp-body">
-
       <!-- ── 0. Grab All ──────────────────────────────────────────────── -->
       <!-- Fetches EVERY Curtin unit outline for selected semesters/years. -->
       <!-- Useful for validating parser coverage across the full catalogue. -->
       <div class="tp-section">
-        <div class="tp-section-header" data-target="grab-body">
+        <div
+          class="tp-section-header"
+          data-target="grab-body"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+          aria-controls="grab-body"
+        >
           <h2>0. Grab All unit outlines</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="grab-body">
-          <p class="tp-status">
-            Downloads every Curtin unit outline from the API for the selected semesters.
-            ⚠ This may take 30–120 minutes depending on the number of units and concurrency setting.
+          <p class="tp-desc">
+            Downloads every Curtin unit outline from the API for the selected
+            semesters. ⚠ This may take 30–120 minutes depending on the number of
+            units and concurrency setting.
           </p>
           <div class="tp-controls">
-            <!-- Year checkboxes -->
-            <div class="tp-field">
-              <label>Years</label>
+            <!-- Year checkboxes — fieldset/legend for correct screen-reader grouping -->
+            <fieldset class="tp-field">
+              <legend>Years</legend>
               <div class="check-group">
-                <label><input type="checkbox" class="grab-year-cb" value="2025"> 2025</label>
-                <label><input type="checkbox" class="grab-year-cb" value="2026" checked> 2026</label>
+                <label
+                  ><input type="checkbox" class="grab-year-cb" value="2025" />
+                  2025</label
+                >
+                <label
+                  ><input
+                    type="checkbox"
+                    class="grab-year-cb"
+                    value="2026"
+                    checked
+                  />
+                  2026</label
+                >
               </div>
-            </div>
+            </fieldset>
             <!-- Semester checkboxes -->
-            <div class="tp-field">
-              <label>Semesters</label>
+            <fieldset class="tp-field">
+              <legend>Semesters</legend>
               <div class="check-group">
-                <label><input type="checkbox" class="grab-sem-cb" value="1" checked> S1</label>
-                <label><input type="checkbox" class="grab-sem-cb" value="2"> S2</label>
+                <label
+                  ><input
+                    type="checkbox"
+                    class="grab-sem-cb"
+                    value="1"
+                    checked
+                  />
+                  S1</label
+                >
+                <label
+                  ><input type="checkbox" class="grab-sem-cb" value="2" />
+                  S2</label
+                >
               </div>
-            </div>
+            </fieldset>
             <!-- Concurrency limit -->
             <div class="tp-field">
-              <label>Concurrency</label>
-              <input id="grab-concurrency" type="text" value="10" style="width:55px" title="Max simultaneous API requests" />
+              <label for="grab-concurrency">Concurrency</label>
+              <input
+                id="grab-concurrency"
+                type="number"
+                min="1"
+                max="100"
+                value="10"
+                class="concurrency-input"
+                title="Max simultaneous API requests"
+              />
             </div>
             <!-- Action buttons -->
-            <div class="tp-field" style="flex-direction:row;gap:6px;align-items:flex-end">
+            <div
+              class="tp-field"
+              style="flex-direction: row; gap: 6px; align-items: flex-end"
+            >
               <button class="btn btn-primary" id="grab-start-btn">Start</button>
-              <button class="btn btn-secondary" id="grab-pause-btn" disabled>Pause</button>
-              <button class="btn btn-secondary" id="grab-cancel-btn" disabled>Cancel</button>
-              <button class="btn btn-secondary" id="grab-download-btn" disabled>Download</button>
+              <button class="btn btn-secondary" id="grab-pause-btn" disabled>
+                Pause
+              </button>
+              <button class="btn btn-secondary" id="grab-cancel-btn" disabled>
+                Cancel
+              </button>
+              <button class="btn btn-secondary" id="grab-download-btn" disabled>
+                Download Report
+              </button>
             </div>
           </div>
 
           <!-- Progress bar (hidden until a scan starts) -->
           <div class="grab-progress-wrap hidden" id="grab-progress-wrap">
             <div class="grab-progress-outer">
-              <div class="grab-progress-inner" id="grab-progress-bar" style="width:0%"></div>
+              <div
+                class="grab-progress-inner"
+                id="grab-progress-bar"
+                style="width: 0%"
+                role="progressbar"
+                aria-valuenow="0"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              ></div>
             </div>
             <div class="grab-progress-stats" id="grab-progress-stats">
               <span>0 / 0</span>
@@ -485,7 +880,7 @@
           </div>
 
           <!-- Status line (spinner / completion message) -->
-          <div class="tp-status" id="grab-status"></div>
+          <div class="tp-status" id="grab-status" aria-live="polite"></div>
 
           <!-- Rolling log of recent results (newest at top, capped at 100 lines) -->
           <div id="grab-log" class="grab-log"></div>
@@ -494,89 +889,141 @@
 
       <!-- ── 1. Scan All ──────────────────────────────────────────────── -->
       <div class="tp-section">
-        <div class="tp-section-header" data-target="scan-body">
+        <div
+          class="tp-section-header"
+          data-target="scan-body"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+          aria-controls="scan-body"
+        >
           <h2>1. Scan All units</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="scan-body">
           <div class="tp-controls">
             <div class="tp-field">
-              <label>Semester</label>
+              <label for="scan-sem">Semester</label>
               <select id="scan-sem">
                 <option value="1">S1</option>
                 <option value="2">S2</option>
               </select>
             </div>
             <div class="tp-field">
-              <label>Year</label>
-              <input id="scan-year" type="text" value="2026" style="width:70px" />
+              <label for="scan-year">Year</label>
+              <input
+                id="scan-year"
+                type="number"
+                min="2024"
+                max="2030"
+                value="2026"
+                class="year-input"
+              />
             </div>
             <div class="tp-field">
-              <label>Extra unit</label>
-              <input id="scan-extra" type="text" placeholder="e.g. ISYS1001" />
+              <label for="scan-extra">Extra units</label>
+              <input
+                id="scan-extra"
+                type="text"
+                placeholder="e.g. ISYS1001 COMP2002"
+              />
             </div>
-            <div class="tp-field" style="justify-content:flex-end">
+            <!-- Scan All and Download Report on one row so they stay together on narrow viewports -->
+            <div
+              class="tp-field"
+              style="flex-direction: row; gap: 6px; justify-content: flex-end"
+            >
               <button class="btn btn-primary" id="scan-btn">Scan All</button>
-            </div>
-            <div class="tp-field" style="justify-content:flex-end">
-              <button class="btn btn-secondary" id="scan-report-btn" disabled>Download Report</button>
+              <button class="btn btn-secondary" id="scan-report-btn" disabled>
+                Download Report
+              </button>
             </div>
           </div>
-          <div class="tp-status" id="scan-status"></div>
+          <div class="tp-status" id="scan-status" aria-live="polite"></div>
           <div id="scan-results"></div>
         </div>
       </div>
 
       <!-- ── 2. Single Unit ──────────────────────────────────────────── -->
       <div class="tp-section">
-        <div class="tp-section-header" data-target="single-body">
+        <div
+          class="tp-section-header"
+          data-target="single-body"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+          aria-controls="single-body"
+        >
           <h2>2. Single unit API test</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="single-body">
           <div class="tp-controls">
             <div class="tp-field">
-              <label>Unit code</label>
+              <label for="single-unit">Unit code</label>
               <input id="single-unit" type="text" placeholder="COMP1005" />
             </div>
             <div class="tp-field">
-              <label>Semester</label>
+              <label for="single-sem">Semester</label>
               <select id="single-sem">
                 <option value="1">S1</option>
                 <option value="2">S2</option>
               </select>
             </div>
             <div class="tp-field">
-              <label>Year</label>
-              <input id="single-year" type="text" value="2026" style="width:70px" />
+              <label for="single-year">Year</label>
+              <input
+                id="single-year"
+                type="number"
+                min="2024"
+                max="2030"
+                value="2026"
+                class="year-input"
+              />
             </div>
-            <div class="tp-field" style="justify-content:flex-end">
-              <button class="btn btn-primary" id="single-btn">Run API Test</button>
+            <div class="tp-field" style="justify-content: flex-end">
+              <button class="btn btn-primary" id="single-btn">
+                Run API Test
+              </button>
             </div>
           </div>
-          <div class="tp-status" id="single-status"></div>
+          <div class="tp-status" id="single-status" aria-live="polite"></div>
           <div id="single-results"></div>
         </div>
       </div>
 
       <!-- ── 3. PDF Test ────────────────────────────────────────────── -->
       <div class="tp-section">
-        <div class="tp-section-header" data-target="pdf-body">
+        <div
+          class="tp-section-header"
+          data-target="pdf-body"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+          aria-controls="pdf-body"
+        >
           <h2>3. PDF test</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="pdf-body">
           <div class="tp-controls">
             <div class="tp-field">
-              <label>Semester</label>
+              <label for="pdf-sem">Semester</label>
               <select id="pdf-sem">
                 <option value="1">S1</option>
                 <option value="2">S2</option>
               </select>
             </div>
             <div class="tp-field">
-              <label>Year</label>
-              <input id="pdf-year" type="text" value="2026" style="width:70px" />
+              <label for="pdf-year">Year</label>
+              <input
+                id="pdf-year"
+                type="number"
+                min="2024"
+                max="2030"
+                value="2026"
+                class="year-input"
+              />
             </div>
           </div>
           <div
@@ -588,37 +1035,63 @@
           >
             Drop unit outline PDF here, or click to browse
           </div>
-          <input type="file" id="pdf-input" accept=".pdf" style="display:none" />
-          <div class="tp-status" id="pdf-status"></div>
+          <input
+            type="file"
+            id="pdf-input"
+            accept=".pdf"
+            style="display: none"
+          />
+          <div class="tp-status" id="pdf-status" aria-live="polite"></div>
           <div id="pdf-results"></div>
         </div>
       </div>
 
       <!-- ── 4. API ↔ PDF Diff ─────────────────────────────────────── -->
       <div class="tp-section">
-        <div class="tp-section-header" data-target="diff-body">
+        <div
+          class="tp-section-header"
+          data-target="diff-body"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+          aria-controls="diff-body"
+        >
           <h2>4. API ↔ PDF diff</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="diff-body">
-          <div class="tp-status" id="diff-status">Run an API test (section 2) and a PDF test (section 3) for the same unit to see a diff.</div>
+          <div class="tp-status" id="diff-status" aria-live="polite">
+            Run an API test (section 2) and a PDF test (section 3) for the same
+            unit to see a diff.
+          </div>
           <div id="diff-results"></div>
         </div>
       </div>
 
       <!-- ── 5. Regression ─────────────────────────────────────────── -->
       <div class="tp-section">
-        <div class="tp-section-header" data-target="reg-body">
+        <div
+          class="tp-section-header"
+          data-target="reg-body"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+          aria-controls="reg-body"
+        >
           <h2>5. Regression / baseline check</h2>
           <span class="chevron">▼</span>
         </div>
         <div class="tp-section-body" id="reg-body">
-          <p class="tp-status">Compares scan / single-test results against configured baselines. Flags regressions (fewer items than expected or more TBA than allowed). Run a scan first.</p>
+          <p class="tp-desc">
+            Compares scan / single-test results against configured baselines.
+            Flags regressions (fewer items than expected or more TBA than
+            allowed). Run a scan first.
+          </p>
           <div id="reg-results"></div>
         </div>
       </div>
-
-    </div><!-- /.tp-body -->
+    </div>
+    <!-- /.tp-body -->
 
     <script src="testPage.js"></script>
   </body>

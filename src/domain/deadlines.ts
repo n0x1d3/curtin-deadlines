@@ -2,7 +2,7 @@
 // Pure functions for classifying, filtering, sorting, and grouping deadlines.
 // No Chrome APIs, no DOM access — all inputs and outputs are plain data.
 
-import type { Deadline } from '../types';
+import type { Deadline } from "../types";
 
 // ── Series / week utilities ───────────────────────────────────────────────────
 
@@ -14,7 +14,7 @@ import type { Deadline } from '../types';
  */
 export function seriesKey(unit: string, title: string): string {
   if (/\s+\d+$/.test(title)) {
-    return `${unit}|${title.replace(/\s+\d+$/, '').trim()}`;
+    return `${unit}|${title.replace(/\s+\d+$/, "").trim()}`;
   }
   return `${unit}|${title}`;
 }
@@ -34,7 +34,7 @@ export function parseWeekInput(raw: string): number[] {
   const rangeMatch = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
   if (rangeMatch) {
     const start = parseInt(rangeMatch[1], 10);
-    const end   = parseInt(rangeMatch[2], 10);
+    const end = parseInt(rangeMatch[2], 10);
     const weeks: number[] = [];
     for (let w = Math.min(start, end); w <= Math.max(start, end); w++) {
       if (w >= 1 && w <= 20) weeks.push(w);
@@ -84,7 +84,9 @@ export function isFinalExamType(title: string): boolean {
  *   "Teaching weeks 2-12"             → null  (plural "weeks" doesn't match)
  *   "Fortnightly"                     → null
  */
-export function extractSingleWeek(weekLabel: string | undefined): number | null {
+export function extractSingleWeek(
+  weekLabel: string | undefined,
+): number | null {
   if (!weekLabel) return null;
   const m = /\bweek\s+(\d{1,2})\b/i.exec(weekLabel);
   return m ? parseInt(m[1], 10) : null;
@@ -109,9 +111,9 @@ export function buildDeadlineSections(
   deadlines: Deadline[],
   opts: {
     filterUnit: string;
-    filterStatus: 'all' | 'upcoming' | 'overdue' | 'tba';
-    sortBy: 'date' | 'unit';
-    overduePosition: 'top' | 'bottom';
+    filterStatus: "all" | "upcoming" | "overdue" | "tba";
+    sortBy: "date" | "unit";
+    overduePosition: "top" | "bottom";
   },
 ): { sections: DeadlineSection[]; display: Deadline[] } {
   const now = new Date();
@@ -123,11 +125,11 @@ export function buildDeadlineSections(
   }
 
   // ── Apply status filter ─────────────────────────────────────────────────────
-  if (opts.filterStatus === 'upcoming') {
+  if (opts.filterStatus === "upcoming") {
     display = display.filter((d) => !d.dateTBA && new Date(d.dueDate) > now);
-  } else if (opts.filterStatus === 'tba') {
+  } else if (opts.filterStatus === "tba") {
     display = display.filter((d) => !!d.dateTBA);
-  } else if (opts.filterStatus === 'overdue') {
+  } else if (opts.filterStatus === "overdue") {
     display = display.filter((d) => !d.dateTBA && new Date(d.dueDate) <= now);
   }
 
@@ -147,22 +149,32 @@ export function buildDeadlineSections(
     (d) => !isFinalExamType(d.title) && extractSingleWeek(d.weekLabel) === null,
   );
 
-  const upcoming = display.filter((d) => !d.dateTBA && new Date(d.dueDate) > now);
-  const overdue  = display.filter((d) => !d.dateTBA && new Date(d.dueDate) <= now);
+  const upcoming = display.filter(
+    (d) => !d.dateTBA && new Date(d.dueDate) > now,
+  );
+  const overdue = display.filter(
+    (d) => !d.dateTBA && new Date(d.dueDate) <= now,
+  );
 
   // ── Sort each group ─────────────────────────────────────────────────────────
   // Exam TBAs sorted by unit (predictable order — exam timetable determines actual date)
   examTba.sort((a, b) => a.unit.localeCompare(b.unit));
 
-  if (opts.sortBy === 'unit') {
+  if (opts.sortBy === "unit") {
     weekKnownTba.sort((a, b) => {
       const wa = extractSingleWeek(a.weekLabel) ?? 99;
       const wb = extractSingleWeek(b.weekLabel) ?? 99;
       return wa - wb || a.unit.localeCompare(b.unit);
     });
     fullyTba.sort((a, b) => a.unit.localeCompare(b.unit));
-    upcoming.sort((a, b) => a.unit.localeCompare(b.unit) || a.dueDate.localeCompare(b.dueDate));
-    overdue.sort((a, b) => a.unit.localeCompare(b.unit) || a.dueDate.localeCompare(b.dueDate));
+    upcoming.sort(
+      (a, b) =>
+        a.unit.localeCompare(b.unit) || a.dueDate.localeCompare(b.dueDate),
+    );
+    overdue.sort(
+      (a, b) =>
+        a.unit.localeCompare(b.unit) || a.dueDate.localeCompare(b.dueDate),
+    );
   } else {
     // Date sort — week-known TBAs sorted by week number so earlier weeks appear first
     weekKnownTba.sort((a, b) => {
@@ -177,38 +189,40 @@ export function buildDeadlineSections(
 
   // ── Build ordered section list ──────────────────────────────────────────────
   // Section labels are only shown when there are multiple TBA sub-groups present
-  const tbaSectionCount = [examTba, weekKnownTba, fullyTba].filter((g) => g.length > 0).length;
-  const showTbaLabels   = tbaSectionCount > 1;
+  const tbaSectionCount = [examTba, weekKnownTba, fullyTba].filter(
+    (g) => g.length > 0,
+  ).length;
+  const showTbaLabels = tbaSectionCount > 1;
 
   const sections: DeadlineSection[] = [];
 
   if (examTba.length > 0) {
     sections.push({
-      label: showTbaLabels ? 'Exam period · date TBC' : null,
+      label: showTbaLabels ? "Exam period · date TBC" : null,
       items: examTba,
     });
   }
   if (weekKnownTba.length > 0) {
     sections.push({
-      label: showTbaLabels ? 'Week scheduled · date TBC' : null,
+      label: showTbaLabels ? "Week scheduled · date TBC" : null,
       items: weekKnownTba,
     });
   }
   if (fullyTba.length > 0) {
     sections.push({
-      label: showTbaLabels ? 'Date unknown' : null,
+      label: showTbaLabels ? "Date unknown" : null,
       items: fullyTba,
     });
   }
 
   // Overdue position (top/bottom) is a user preference
-  if (opts.overduePosition === 'top' && overdue.length > 0) {
+  if (opts.overduePosition === "top" && overdue.length > 0) {
     sections.push({ label: null, items: overdue });
   }
   if (upcoming.length > 0) {
     sections.push({ label: null, items: upcoming });
   }
-  if (opts.overduePosition !== 'top' && overdue.length > 0) {
+  if (opts.overduePosition !== "top" && overdue.length > 0) {
     sections.push({ label: null, items: overdue });
   }
 

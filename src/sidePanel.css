@@ -14,10 +14,10 @@
   --error: #ef4444;
   --success: #22c55e;
   /* Urgency colours for deadline cards */
-  --urgent: #ef4444;      /* < 48 h — red */
-  --soon: #f97316;        /* < 7 d  — orange */
-  --ok: #22c55e;          /* > 7 d  — green */
-  --overdue: #9ca3af;     /* past   — grey */
+  --urgent: #ef4444; /* < 48 h — red */
+  --soon: #f97316; /* < 7 d  — orange */
+  --ok: #22c55e; /* > 7 d  — green */
+  --overdue: #9ca3af; /* past   — grey */
   --radius: 10px;
 }
 
@@ -49,7 +49,8 @@ body.dark {
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
 html {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 14px;
   color: var(--text-primary);
 }
@@ -58,7 +59,9 @@ body {
   width: 380px;
   min-height: 100vh;
   background: var(--bg);
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .app {
@@ -123,7 +126,9 @@ body {
   font-size: 14px;
   line-height: 1;
   color: var(--text-muted);
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .icon-btn svg {
@@ -146,7 +151,9 @@ body {
   padding: 20px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
   position: relative;
 }
 
@@ -184,6 +191,13 @@ body {
 .drop-sub {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* Badge inside the drop zone — shows staged file count, e.g. "3 PDFs staged" */
+.queue-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 /* PDF parsing spinner (shown while processing) */
@@ -225,7 +239,9 @@ body {
   color: var(--text-muted);
   user-select: none;
   list-style: none; /* hide default details triangle */
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .manual-toggle:hover {
@@ -299,7 +315,7 @@ body {
   color: var(--text-card);
 }
 
-.mode-option input[type='radio'] {
+.mode-option input[type="radio"] {
   accent-color: var(--gold);
 }
 
@@ -331,7 +347,9 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
   letter-spacing: 0.1px;
   box-shadow: var(--shadow);
 }
@@ -417,6 +435,30 @@ body {
   max-width: 180px;
 }
 
+/* Meta row: outcomes + late/extension policy badges below the card title */
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+  margin-bottom: 1px;
+}
+
+.card-meta-item {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* Highlights "No" policy values (late not accepted, extension not considered) */
+.card-meta-item.meta-no {
+  color: var(--overdue);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 /* Assessment weight badge shown in the date row, e.g. "· 20%" */
 .card-weight {
   font-size: 11px;
@@ -478,7 +520,9 @@ body {
   color: var(--text-muted);
   padding: 2px 4px;
   border-radius: 4px;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .card-delete:hover {
@@ -537,7 +581,9 @@ body {
   font-size: 11px;
   color: var(--gold);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .card-set-date-btn:hover {
@@ -585,11 +631,21 @@ body {
   color: var(--text-primary);
 }
 
-.card-date-inp { width: 120px; }
-.card-time-inp { width: 72px; }
-.card-week-inp { width: 60px; }
-.card-sem-sel  { width: 46px; }
-.card-year-inp { width: 62px; }
+.card-date-inp {
+  width: 120px;
+}
+.card-time-inp {
+  width: 72px;
+}
+.card-week-inp {
+  width: 60px;
+}
+.card-sem-sel {
+  width: 46px;
+}
+.card-year-inp {
+  width: 62px;
+}
 
 .card-date-inp:focus,
 .card-time-inp:focus,
@@ -695,7 +751,10 @@ body {
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -728,7 +787,9 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -893,7 +954,7 @@ body {
   opacity: 0.6;
 }
 
-.confirm-row input[type='checkbox'] {
+.confirm-row input[type="checkbox"] {
   margin-top: 2px;
   accent-color: var(--gold);
   flex-shrink: 0;
@@ -995,6 +1056,34 @@ body {
   padding: 1px 5px;
 }
 
+/* Outcomes badge on confirmation rows, e.g. "LO 1,2,4" */
+.conf-outcomes-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* Late / Extension policy badges on confirmation rows */
+.conf-late-badge,
+.conf-ext-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* "No" variant — warns the user that late/extension is not allowed */
+.conf-late-badge.badge-no,
+.conf-ext-badge.badge-no {
+  color: var(--overdue);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 /* No-results state inside confirmation */
 .confirm-empty {
   padding: 20px;
@@ -1022,6 +1111,35 @@ body {
   gap: 5px;
   flex-wrap: wrap;
   margin-top: 4px;
+}
+
+/* ── PDF conflict picker ──────────────────────────────────────────────────── */
+/* Shown inside a confirmation row when the same unit+title already exists    */
+/* in storage with a concrete date. Lets the user pick keep vs overwrite.     */
+.conf-conflict-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--soon) 10%, var(--bg-card));
+  border-left: 3px solid var(--soon);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.conf-conflict-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.conf-conflict-opt {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  color: var(--text-primary);
 }
 
 .conf-fill-label {
@@ -1106,7 +1224,9 @@ body {
   color: var(--text-muted);
   padding: 2px 4px;
   border-radius: 4px;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .card-complete:hover {
@@ -1146,7 +1266,7 @@ body {
   user-select: none;
 }
 
-.card-submit-skip-lbl input[type='checkbox'] {
+.card-submit-skip-lbl input[type="checkbox"] {
   accent-color: var(--gold);
   width: 13px;
   height: 13px;
@@ -1304,7 +1424,9 @@ body {
   padding: 2px 3px;
   border-radius: 3px;
   flex-shrink: 0;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .series-item-del:hover {
@@ -1411,7 +1533,9 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
   white-space: nowrap;
   box-shadow: var(--shadow);
 }
@@ -1445,7 +1569,7 @@ body {
 
 /* Loading state — prepend a small CSS spinner */
 #api-status.api-status--loading::before {
-  content: '';
+  content: "";
   display: inline-block;
   width: 12px;
   height: 12px;
@@ -1458,8 +1582,12 @@ body {
 
 /* ── Animations ──────────────────────────────────────────────────────────── */
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Button variants ─────────────────────────────────────────────────────── */
@@ -1552,16 +1680,8 @@ body {
   color: var(--text-card);
 }
 
-.radio-row input[type='radio'] {
+.radio-row input[type="radio"] {
   accent-color: var(--gold);
-}
-
-/* ── .ics import hint (below drop-zone) ──────────────────────────────────── */
-.ics-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
-  margin: -4px 0 4px; /* pull slightly closer to the drop-zone */
 }
 
 /* Unstyled inline button that looks like a link */
@@ -1622,7 +1742,7 @@ body {
   border-bottom: none;
 }
 
-.ics-unit-row input[type='checkbox'] {
+.ics-unit-row input[type="checkbox"] {
   flex-shrink: 0;
   accent-color: var(--gold);
   width: 14px;
@@ -1665,7 +1785,7 @@ body {
   opacity: 0.6;
 }
 
-.ics-match-row input[type='checkbox'] {
+.ics-match-row input[type="checkbox"] {
   flex-shrink: 0;
   accent-color: var(--gold);
   width: 14px;
@@ -1686,4 +1806,114 @@ body {
   color: var(--text-muted);
   flex-shrink: 0;
   text-align: right;
+}
+
+/* ── ICS conflict badge ───────────────────────────────────────────────────── */
+/* Shown next to a match row title when the deadline already has a date and   */
+/* the ICS has a different time — signals an update rather than a new match.  */
+.ics-conflict-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--soon) 15%, transparent);
+  color: var(--soon);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* Shows the previously saved date below the match title, e.g. "was: Mon 9 Nov 2026" */
+.ics-existing-date {
+  font-size: 10px;
+  opacity: 0.6;
+  display: block;
+}
+
+/* ── Toast notifications ────────────────────────────────────────────────── */
+
+/* Fixed container stacks toasts above each other in the bottom-right corner.
+   pointer-events: none so the container itself doesn't block clicks; individual
+   toasts re-enable pointer events so their close button is clickable. */
+#toast-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  position: relative;
+  padding: 10px 36px 10px 12px; /* right padding leaves room for close button */
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  animation: toast-in 0.2s ease forwards;
+}
+
+.toast--error {
+  background: var(--error);
+}
+.toast--success {
+  background: var(--success);
+  color: #1a1a1a;
+}
+.toast--info {
+  background: var(--text-muted);
+}
+
+/* Exit animation — triggered by adding .toast--exit via JS */
+.toast--exit {
+  animation: toast-out 0.4s ease forwards;
+}
+
+/* Close button — overlays top-right corner of the toast.
+   width: auto overrides the global .button rule which sets width: 100%. */
+.toast__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: auto;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+.toast__close:hover {
+  opacity: 1;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
