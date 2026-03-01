@@ -2,7 +2,7 @@
 // All chrome.storage.local interactions are consolidated here.
 // No rendering or DOM access — callers are responsible for re-rendering.
 
-import type { Deadline, AppSettings } from "../types";
+import type { Deadline, AppSettings, TimetableSession } from "../types";
 
 // ── Deadline storage ──────────────────────────────────────────────────────────
 
@@ -51,6 +51,21 @@ export async function addDeadline(deadline: Deadline): Promise<void> {
   deadlines.push(deadline);
   deadlines.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   await saveDeadlines(deadlines);
+}
+
+// ── Timetable session storage ─────────────────────────────────────────────────
+
+/** Load the cached timetable session schedule (day-of-week per unit + session type). */
+export async function loadTimetableSessions(): Promise<TimetableSession[]> {
+  const result = await chrome.storage.local.get("timetableSessions");
+  return (result.timetableSessions as TimetableSession[]) ?? [];
+}
+
+/** Persist the timetable session schedule extracted from the most recent .ics import. */
+export async function saveTimetableSessions(
+  sessions: TimetableSession[],
+): Promise<void> {
+  await chrome.storage.local.set({ timetableSessions: sessions });
 }
 
 /** Remove a deadline by id. */

@@ -93,6 +93,22 @@ export interface AppSettings {
   overduePosition: "top" | "bottom";
 }
 
+// ── Timetable session types ───────────────────────────────────────────────────
+
+/**
+ * A recurring class session extracted from a timetable .ics file.
+ * Used to resolve which day of the week recurring assessments fall on.
+ */
+export interface TimetableSession {
+  unit: string;
+  /** Normalised session type: "lab" | "tutorial" | "workshop" | "lecture" | "practical" */
+  type: string;
+  /** weekToDate dayOffset: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri */
+  dayOfWeek: number;
+  /** Semester week numbers when this session occurs, e.g. [2,4,6,8,10,12] */
+  weeks: number[];
+}
+
 // ── ICS types ─────────────────────────────────────────────────────────────────
 
 /** A single event extracted from an .ics (iCalendar) file. */
@@ -114,6 +130,10 @@ export interface IcsMatch {
   confidence: "high" | "low";
   /** Human-readable description of how the match was made, e.g. "Week 5 lab". */
   matchReason?: string;
+  /** True when deadline already has a concrete date; applying overwrites it. */
+  isConflict?: boolean;
+  /** Current saved date when isConflict is true (for display). */
+  existingDate?: Date;
 }
 
 /** Units and semester/year extracted from a timetable .ics file. */

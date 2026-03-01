@@ -1,6 +1,12 @@
 // ── PDF drop zone wiring ─────────────────────────────────────────────────────
-// Handles: drag-and-drop / click-to-browse for PDF files, multi-file parsing,
-// and handing parsed assessments off to the confirmation checklist.
+// Handles: drag-and-drop / click-to-browse for PDF files, file staging queue,
+// multi-file parsing, and handing parsed assessments off to the confirmation
+// checklist.
+//
+// Dropped/browsed PDFs are staged (shown as a count badge inside the drop zone)
+// until the user clicks "Scan" below it.
+// .ics files are NOT staged here — the capture-phase listener in wireIcs.ts
+// consumes them before this handler fires.
 
 import type { PendingDeadline } from "../types";
 import {
@@ -21,22 +27,91 @@ export interface PdfDeps {
   showConfirmation: (
     groups: { filename: string; items: PendingDeadline[] }[],
   ) => void;
+  handleIcsFile: (file: File) => Promise<void>;
 }
 
 // ── Main wiring function ─────────────────────────────────────────────────────
 
 /**
  * Wire up the PDF drop zone: drag-and-drop events, click-to-browse,
- * and multi-file PDF parsing with progress feedback.
+ * file staging queue, and multi-file PDF parsing with progress feedback.
  * Called once from init().
  */
 export function wirePDFDropZone(deps: PdfDeps): void {
-  const { showConfirmation } = deps;
+  const { showConfirmation, handleIcsFile } = deps;
 
   const dropZone = document.getElementById("drop-zone")!;
   const fileInput = document.getElementById("file-input") as HTMLInputElement;
   const parseProgress = document.getElementById("parse-progress")!;
   const parseStatus = document.getElementById("parse-status")!;
+
+  // ── Queue element refs ────────────────────────────────────────────────────
+  const queueBadge = document.getElementById("queue-badge")!;
+  const fileQueueCount = document.getElementById("file-queue-count")!;
+  const fileQueueScan = document.getElementById(
+    "file-queue-scan",
+  ) as HTMLButtonElement;
+
+  // Holds files waiting to be scanned — persists across multiple drop/browse actions.
+  const stagedFiles: File[] = [];
+
+  // ── Queue rendering ───────────────────────────────────────────────────────
+
+  /**
+   * Update the badge inside the drop zone and show/hide the scan button.
+   * Both are hidden when the queue is empty.
+   */
+  function renderQueue(): void {
+    const n = stagedFiles.length;
+    if (n === 0) {
+      queueBadge.classList.add("hidden");
+      fileQueueScan.classList.add("hidden");
+      return;
+    }
+    queueBadge.textContent = stagedFiles.map((f) => f.name).join(", ");
+    queueBadge.classList.remove("hidden");
+    fileQueueCount.textContent = `${n} file${n !== 1 ? "s" : ""}`;
+    fileQueueScan.classList.remove("hidden");
+  }
+
+  /**
+   * Add PDF or .ics files to the staging queue — deduplicated by name.
+   * Caps: 10 total, 8 PDFs, 2 .ics files.
+   * Other file types are silently ignored.
+   */
+  function stageFiles(incoming: File[]): void {
+    const accepted = incoming.filter((f) => {
+      const name = f.name.toLowerCase();
+      return name.endsWith(".pdf") || name.endsWith(".ics");
+    });
+    for (const f of accepted) {
+      if (stagedFiles.some((s) => s.name === f.name)) continue; // dedup by name
+      const isPdf = f.name.toLowerCase().endsWith(".pdf");
+      const isIcs = f.name.toLowerCase().endsWith(".ics");
+      const pdfCount = stagedFiles.filter((s) =>
+        s.name.toLowerCase().endsWith(".pdf"),
+      ).length;
+      const icsCount = stagedFiles.filter((s) =>
+        s.name.toLowerCase().endsWith(".ics"),
+      ).length;
+      if (stagedFiles.length >= 10) {
+        showToast("Maximum 10 files can be staged at once.", "error");
+        break;
+      }
+      if (isPdf && pdfCount >= 8) {
+        showToast("Maximum 8 PDFs can be staged at once.", "error");
+        break;
+      }
+      if (isIcs && icsCount >= 2) {
+        showToast("Maximum 2 .ics files can be staged at once.", "error");
+        break;
+      }
+      stagedFiles.push(f);
+    }
+    renderQueue();
+  }
+
+  // ── PDF parsing ───────────────────────────────────────────────────────────
 
   /**
    * Parse up to 4 PDF files in sequence and show a combined confirmation.
@@ -44,22 +119,13 @@ export function wirePDFDropZone(deps: PdfDeps): void {
    * note to the user — valid files still proceed to the confirmation screen.
    */
   async function processFiles(rawFiles: File[]): Promise<void> {
-    // Filter to PDFs only
     const pdfs = rawFiles.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
-    if (pdfs.length === 0) {
-      // If only .ics files were dropped, the ICS handler (wireIcsSection) deals
-      // with them separately — don't alert the user with a confusing message.
-      const hasOnlyIcs = rawFiles.every((f) =>
-        f.name.toLowerCase().endsWith(".ics"),
-      );
-      if (!hasOnlyIcs) showToast("Please select PDF files.", "error");
+    // Belt-and-suspenders: stageFiles() already enforces the cap
+    if (pdfs.length > 8) {
+      showToast("Please upload at most 8 PDFs at a time.", "error");
       return;
     }
-    // Enforce the 4-file limit
-    if (pdfs.length > 4) {
-      showToast("Please upload at most 4 PDFs at a time.", "error");
-      return;
-    }
+    if (pdfs.length === 0) return;
 
     parseProgress.classList.remove("hidden");
 
@@ -155,7 +221,33 @@ export function wirePDFDropZone(deps: PdfDeps): void {
     }
   }
 
-  // ── Drag-and-drop events ─────────────────────────────────────────────────
+  // ── Queue button handlers ─────────────────────────────────────────────────
+
+  fileQueueScan.addEventListener("click", async () => {
+    if (stagedFiles.length === 0) return;
+    // Drain the queue atomically before processing begins
+    const toProcess = stagedFiles.splice(0);
+    renderQueue();
+    // Route by type: .ics → ICS handler (sequential), .pdf → PDF parser (batch)
+    const icsFiles = toProcess.filter((f) =>
+      f.name.toLowerCase().endsWith(".ics"),
+    );
+    const pdfFiles = toProcess.filter((f) =>
+      f.name.toLowerCase().endsWith(".pdf"),
+    );
+    try {
+      for (const f of icsFiles) await handleIcsFile(f);
+      if (pdfFiles.length > 0) await processFiles(pdfFiles);
+    } catch (err) {
+      console.error("Scan failed:", err);
+      showToast(
+        `Scan failed: ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      );
+    }
+  });
+
+  // ── Drag-and-drop events ──────────────────────────────────────────────────
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("drag-over");
@@ -169,10 +261,12 @@ export function wirePDFDropZone(deps: PdfDeps): void {
     e.preventDefault();
     dropZone.classList.remove("drag-over");
     const files = [...(e.dataTransfer?.files ?? [])];
-    if (files.length) processFiles(files);
+    // .ics files are consumed by the capture-phase listener in wireIcs.ts;
+    // only PDF (and any other) files reach this handler.
+    if (files.length) stageFiles(files);
   });
 
-  // ── Click to browse ──────────────────────────────────────────────────────
+  // ── Click to browse ───────────────────────────────────────────────────────
   dropZone.addEventListener("click", () => fileInput.click());
   dropZone.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") fileInput.click();
@@ -181,7 +275,7 @@ export function wirePDFDropZone(deps: PdfDeps): void {
   fileInput.addEventListener("change", () => {
     const files = [...(fileInput.files ?? [])];
     if (files.length) {
-      processFiles(files);
+      stageFiles(files);
       fileInput.value = ""; // reset so the same files can be re-selected
     }
   });

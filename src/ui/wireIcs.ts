@@ -7,9 +7,15 @@ import {
   parseIcs,
   matchIcsToDeadlines,
   matchIcsByWeekAndSession,
+  matchIcsDatedConflicts,
   detectTimetableUnits,
+  extractTimetableSessions,
 } from "../ics/parser";
-import { loadDeadlines, setDeadlineDate } from "../storage";
+import {
+  loadDeadlines,
+  setDeadlineDate,
+  saveTimetableSessions,
+} from "../storage";
 import { fetchOutline } from "../api/outlineApi";
 import { escapeHtml, defaultYear } from "../utils/format";
 import { showToast } from "./toast";
@@ -91,14 +97,29 @@ function showIcsSection(
 
   if (hasMatches) {
     const hintEl = document.getElementById("ics-hint")!;
-    hintEl.textContent = `${matches.length} exam date${matches.length !== 1 ? "s" : ""} matched to TBA deadlines`;
+    // Build a hint that mentions both TBA matches and dated-deadline updates
+    const tbaCount = matches.filter((m) => !m.isConflict).length;
+    const conflictCount = matches.filter((m) => m.isConflict).length;
+    const hintParts: string[] = [];
+    if (tbaCount > 0)
+      hintParts.push(
+        `${tbaCount} exam date${tbaCount !== 1 ? "s" : ""} matched to TBA deadlines`,
+      );
+    if (conflictCount > 0)
+      hintParts.push(
+        `${conflictCount} update${conflictCount !== 1 ? "s" : ""} for dated deadlines`,
+      );
+    hintEl.textContent =
+      hintParts.join(" · ") ||
+      `${matches.length} match${matches.length !== 1 ? "es" : ""} found`;
 
     const listEl = document.getElementById("ics-list")!;
     listEl.innerHTML = "";
 
     for (const match of matches) {
       const row = document.createElement("div");
-      row.className = `ics-match-row${match.confidence === "low" ? " low" : ""}`;
+      // Conflict rows don't get the "low" dim class — they use the amber badge instead
+      row.className = `ics-match-row${match.confidence === "low" && !match.isConflict ? " low" : ""}`;
       row.dataset.id = match.deadlineId;
       // Use resolvedDate for data-iso — may differ from event.dtstart when a "N hours after" offset was applied
       row.dataset.iso = match.resolvedDate.toISOString();
@@ -122,10 +143,30 @@ function showIcsSection(
           })
         : "";
 
-      // Dim label for low-confidence matches
+      // Conflict rows: unchecked by default + amber update badge + "was:" existing date
+      // Normal rows: pre-checked for high confidence; [verify] label for low confidence
+      const isChecked = match.isConflict
+        ? ""
+        : match.confidence === "high"
+          ? "checked"
+          : "";
       const verifyLabel =
-        match.confidence === "low"
+        !match.isConflict && match.confidence === "low"
           ? ' <span style="font-size:10px;opacity:0.6">[verify]</span>'
+          : "";
+      const conflictBadge = match.isConflict
+        ? '<span class="ics-conflict-badge">update</span>'
+        : "";
+      const existingDateHtml =
+        match.isConflict && match.existingDate
+          ? `<span class="ics-existing-date">was: ${escapeHtml(
+              match.existingDate.toLocaleDateString("en-AU", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              }),
+            )}</span>`
           : "";
 
       // Show match reason beneath the label (e.g. "Week 5 lab", "24h after Week 7 workshop")
@@ -134,9 +175,10 @@ function showIcsSection(
         : "";
 
       row.innerHTML = `
-        <input type="checkbox" ${match.confidence === "high" ? "checked" : ""} />
+        <input type="checkbox" ${isChecked} />
         <span class="ics-match-label">
-          <strong>${escapeHtml(match.deadlineUnit)}</strong> — ${escapeHtml(match.deadlineTitle)}${verifyLabel}
+          <strong>${escapeHtml(match.deadlineUnit)}</strong> — ${escapeHtml(match.deadlineTitle)}${verifyLabel}${conflictBadge}
+          ${existingDateHtml}
           ${reasonHtml}
         </span>
         <span class="ics-match-date">${escapeHtml(dateStr)}${escapeHtml(timeStr)}</span>
@@ -149,12 +191,15 @@ function showIcsSection(
 // ── Main wiring function ─────────────────────────────────────────────────────
 
 /**
- * Wire up the ICS import section: the inline import button, file inputs,
- * the auto-fetch button, the exam-apply button, and the back button.
- * Also extends the PDF drop-zone (capture phase) to route .ics drops here.
+ * Wire up the ICS import section: the auto-fetch button, the exam-apply
+ * button, and the back button.
+ * Returns `handleIcsFile` so wirePDFDropZone can invoke it from the shared
+ * staging queue when the user clicks "Scan".
  * Called once from init().
  */
-export function wireIcsSection(deps: IcsDeps): void {
+export function wireIcsSection(deps: IcsDeps): {
+  handleIcsFile: (file: File) => Promise<void>;
+} {
   const { showConfirmation, renderDeadlines } = deps;
 
   /** Helper: close the ICS section and return to the main panel. */
@@ -179,6 +224,9 @@ export function wireIcsSection(deps: IcsDeps): void {
     // Detect unit codes + semester from the timetable events
     const timetable = detectTimetableUnits(events);
 
+    // Extract and persist session day-of-week info for use in the confirmation screen
+    await saveTimetableSessions(extractTimetableSessions(events));
+
     // Load current TBA deadlines for both matching passes
     const deadlines = await loadDeadlines();
 
@@ -200,8 +248,16 @@ export function wireIcsSection(deps: IcsDeps): void {
       ...sessionMatches.filter((m) => !seenIds.has(m.deadlineId)),
     ];
 
+    // Pass 3: surface conflicts for already-dated deadlines (ICS has updated times)
+    const datedConflicts = matchIcsDatedConflicts(events, deadlines);
+    const allSeenIds = new Set(combined.map((m) => m.deadlineId));
+    const combined2 = [
+      ...combined,
+      ...datedConflicts.filter((m) => !allSeenIds.has(m.deadlineId)),
+    ];
+
     // Nothing useful in this file
-    if (timetable.units.length === 0 && combined.length === 0) {
+    if (timetable.units.length === 0 && combined2.length === 0) {
       showToast(
         "No matching deadlines or unit codes found in this timetable.",
         "info",
@@ -209,40 +265,8 @@ export function wireIcsSection(deps: IcsDeps): void {
       return;
     }
 
-    showIcsSection(timetable.units.length > 0 ? timetable : null, combined);
+    showIcsSection(timetable.units.length > 0 ? timetable : null, combined2);
   }
-
-  // ── Drop-zone extension: capture .ics drops before processFiles() sees them ─
-  // We listen in the capture phase so this runs before the PDF handler's bubble
-  // listener. processFiles() already ignores .ics-only drops gracefully.
-  const dropZone = document.getElementById("drop-zone")!;
-  dropZone.addEventListener(
-    "drop",
-    (e) => {
-      const files = [...(e.dataTransfer?.files ?? [])];
-      const icsFiles = files.filter((f) =>
-        f.name.toLowerCase().endsWith(".ics"),
-      );
-      for (const f of icsFiles) handleIcsFile(f);
-    },
-    true,
-  ); // capture phase
-
-  // Also intercept .ics files chosen through the hidden #file-input browse dialog.
-  // We listen in capture so this fires before wirePDFDropZone's bubble listener,
-  // which already filters to .pdf anyway.
-  const fileInput = document.getElementById("file-input") as HTMLInputElement;
-  fileInput.addEventListener(
-    "change",
-    async () => {
-      const allFiles = [...(fileInput.files ?? [])];
-      const icsFiles = allFiles.filter((f) =>
-        f.name.toLowerCase().endsWith(".ics"),
-      );
-      for (const f of icsFiles) await handleIcsFile(f);
-    },
-    true,
-  ); // capture phase
 
   // ── Back button ───────────────────────────────────────────────────────────
   document.getElementById("ics-back")!.addEventListener("click", closeIcs);
@@ -342,4 +366,6 @@ export function wireIcsSection(deps: IcsDeps): void {
     closeIcs();
     await renderDeadlines();
   });
+
+  return { handleIcsFile };
 }
