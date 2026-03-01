@@ -244,6 +244,7 @@ describe("exportJSON", () => {
     exportJSON([deadline]);
 
     // The Blob passed to createObjectURL should contain valid JSON with the deadline
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blob: Blob = (createObjectURL as any).mock.calls[0][0];
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe("application/json");

@@ -11,6 +11,8 @@ import * as pdfjsLib from "pdfjs-dist";
  * Pass chrome.runtime.getURL('pdf.worker.min.js') as the argument.
  */
 export function initPdfWorker(workerSrc: string): void {
+  // pdf.js exposes GlobalWorkerOptions on an untyped namespace object in this build.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc;
 }
 
@@ -178,6 +180,8 @@ export async function extractPDFText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const typedArray = new Uint8Array(arrayBuffer);
 
+  // pdf.js getDocument is exposed via an untyped runtime object in this package version.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loadingTask = (pdfjsLib as any).getDocument({ data: typedArray });
   const pdfDoc = await loadingTask.promise;
 
@@ -191,6 +195,8 @@ export async function extractPDFText(file: File): Promise<string> {
     // ActualText annotations needed to decode null-mapped glyphs.
     const [textContent, opList] = await Promise.all([
       page.getTextContent(),
+      // pdf.js operator list API is not meaningfully typed; this cast is required.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (page as any).getOperatorList(),
     ]);
 
