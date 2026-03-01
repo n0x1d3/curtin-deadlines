@@ -142,8 +142,7 @@ curtin-deadlines/
 │   │   ├── toast.ts            # showToast()
 │   │   ├── wireIcs.ts          # ICS section wiring
 │   │   ├── wirePdf.ts          # PDF drop zone wiring
-│   │   ├── wireSettings.ts     # Settings panel wiring
-│   │   └── __tests__/
+│   │   └── wireSettings.ts     # Settings panel wiring
 │   │
 │   └── utils/
 │       ├── getDates.ts         # Semester date arithmetic
@@ -276,8 +275,8 @@ Tests are located in `src/**/__tests__/`:
 - `domain/deadlines.test.ts` – deadline grouping, series expansion, filtering
 - `domain/outline.test.ts` – outline parsing (AS_TASK, PC_TEXT)
 - `ics/parser.test.ts` – ICS parsing and deadline matching
-- `pdf/parseAssessments.test.ts` – PDF table extraction
-- `pdf/parseProgramCalendar.test.ts` – calendar parsing
+- `pdf/parser.test.ts` – PDF assessment and program calendar parsing
+- `utils/getDates.test.ts` – semester date arithmetic
 - `utils/format.test.ts` – formatting utilities
 - `storage/backup.test.ts` – JSON export/import
 
