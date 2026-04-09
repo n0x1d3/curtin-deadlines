@@ -13,3 +13,9 @@ node_modules/
 # IDE
 .vscode/
 .idea/
+
+# AI assistant config
+.claude/
+CLAUDE.md
+AGENTS.md
+.mcp.json
